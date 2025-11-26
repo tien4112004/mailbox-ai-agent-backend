@@ -258,12 +258,12 @@ Now, let's see how this workflow translates into concrete commands you can use i
 
 # Comparison: Spec-kit vs. Others
 
-| Feature | Chat-driven | Autocomplete | **Spec-kit** |
-| :--- | :--- | :--- | :--- |
-| **Input** | Natural Language | Code Context | Structured Specs |
-| **Scope** | Snippets | Lines / Blocks | Modules / Features |
-| **Context** | Ephemeral | Local (File) | **Persistent (Kit)** |
-| **Consistency** | Low | Medium | **High** |
+| Feature | Chat-driven | Autocomplete | Agentic (no kit) | **Spec-kit** |
+| :--- | :--- | :--- | :--- | :--- |
+| **Input** | Natural Language | Code Context | Natural Language | **Structured Specs** |
+| **Scope** | Snippets | Lines / Blocks | Modules / Apps | **Modules / Features** |
+| **Context** | Ephemeral | Local (File) | Inferred | **Persistent (Kit)** |
+| **Consistency** | Low | Medium | Medium | **High** |
 
 ---
 
@@ -290,28 +290,19 @@ Now, let's see how this workflow translates into concrete commands you can use i
 # Challenges & Limitations
 
 - **Upfront Investment:**
-  - Requires writing specs *before* coding. (The "Lazy Developer" problem).
-- **Maintenance:**
-  - The Spec-kit must be kept in sync with the code.
-- **Complexity:**
-  - Over-engineering the kit can lead to diminishing returns.
-
----
-
-# Future Outlook
-
-- **Auto-generated Kits:**
-  - AI analyzing existing code to *create* the Spec-kit for you.
-- **IDE Integration:**
-  - "Spec-driven" IDEs where the spec is a first-class citizen.
-- **Continuous Validation:**
-  - CI/CD pipelines that check if code matches the Spec-kit.
+  - Requires discipline to write detailed specs *before* coding, which can feel slower initially.
+- **Maintenance Overhead:**
+  - The Spec-kit must be kept in sync with the code, creating a "dual maintenance" problem.
+- **Skill Curve:**
+  - Writing effective, machine-readable specs is a distinct skill that needs to be learned.
+- **Potential for Rigidity:**
+  - Can be less suitable for highly exploratory or rapidly-changing prototypes where requirements are unclear.
 
 ---
 
 # Conclusion
 
-**Spec-kit Development** moves us from "Coding with AI" to **"Architecting for AI"**.
+**Spec-kit** moves us from "Coding with AI" to **"Architecting for AI"**.
 
 It empowers developers to focus on the **WHAT** (The Specification) and lets the AI handle the **HOW** (The Implementation).
 
