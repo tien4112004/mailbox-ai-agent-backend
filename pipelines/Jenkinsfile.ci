@@ -1,0 +1,77 @@
+pipeline {
+    agent any
+
+    environment {
+        // GitHub repository configuration
+        GIT_REPO = ''
+        
+        // Docker image configuration
+        DOCKER_IMAGE_NAME = ''
+        DOCKER_IMAGE_TAG = "${env.CHANGE_ID ?: env.BRANCH_NAME ?: 'latest'}"
+    }
+
+    stages {
+        stage('Checkout PR Merge') {
+            steps {
+                script {
+                    echo "Detected PR #${env.CHANGE_ID} → target ${env.CHANGE_TARGET}"
+                    echo "Source branch: ${env.CHANGE_BRANCH}"
+                    echo "Jenkins branch: ${env.BRANCH_NAME}"
+                    
+                    withCredentials([usernamePassword(credentialsId: '', usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
+                        sh '''
+                            git init || true
+                            if git remote get-url origin > /dev/null 2>&1; then
+                                git remote remove origin || true
+                            fi
+                            git remote add origin https://$GIT_USERNAME:$GIT_PASSWORD@github.com/Student360-VN/backend.git
+                            git fetch origin +refs/pull/''' + env.CHANGE_ID + '''/merge
+                            git checkout FETCH_HEAD
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                script {
+                    echo "Installing dependencies..."
+                    sh 'npm install'
+                    
+                    echo "Building application..."
+                    sh 'npm run build'
+                    
+                    echo "Build completed successfully"
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    echo "Building Docker image: ${env.DOCKER_IMAGE_NAME}:${env.DOCKER_IMAGE_TAG}"
+                    sh """
+                        docker build -t ${env.DOCKER_IMAGE_NAME}:${env.DOCKER_IMAGE_TAG} .
+                        docker tag ${env.DOCKER_IMAGE_NAME}:${env.DOCKER_IMAGE_TAG} ${env.DOCKER_IMAGE_NAME}:latest
+                    """
+                    echo "Docker image built successfully"
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "CI Pipeline completed successfully!"
+        }
+        failure {
+            echo "CI Pipeline failed!"
+        }
+        always {
+            echo "Cleaning up workspace..."
+            sh 'rm -rf * .* 2>/dev/null || true'
+        }
+    }
+}
+
