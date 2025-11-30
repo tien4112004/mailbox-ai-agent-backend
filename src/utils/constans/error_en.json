@@ -1,0 +1,52 @@
+{
+  "ALEM01": {
+    "error_code": "ALEM01",
+    "message": "Empty Field",
+    "details": "This field is required and cannot be empty."
+  },
+  "ALEM02": {
+    "error_code": "ALEM02",
+    "message": "Invalid Field",
+    "details": "This field format is invalid."
+  },
+  "ALEM03": {
+    "error_code": "ALEM03",
+    "message": "Too Short",
+    "details": "This field value is too short."
+  },
+  "ALEM04": {
+    "error_code": "ALEM04",
+    "message": "Too Long",
+    "details": "This field value is too long."
+  },
+  "ALEM05": {
+    "error_code": "ALEM05",
+    "message": "Out of Range",
+    "details": "This field value is out of the allowed range."
+  },
+  "ALEM06": {
+    "error_code": "ALEM06",
+    "message": "Out of Range Date(Min)",
+    "details": "This field date value is before the allowed minimum date."
+  },
+  "ALEM07": {
+    "error_code": "ALEM07",
+    "message": "Out of Range Date(Max)",
+    "details": "This field date value is after the allowed maximum date."
+  },
+  "ALEM08": {
+    "error_code": "ALEM08",
+    "message": "Invalid Enum Value",
+    "details": "This field must be less than or equal to the specified value."
+  },
+  "ALEM09": {
+    "error_code": "ALEM09",
+    "message": "Invalid Array Element",
+    "details": "One or more elements in this array are invalid."
+  },
+  "PASS01": {
+    "error_code": "PASS01",
+    "message": "Password Complexity",
+    "details": "Password must contain at least one uppercase letter, one number, and one special character"
+  }
+}
