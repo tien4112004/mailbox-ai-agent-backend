@@ -1,0 +1,37 @@
+{
+  "senders": [
+    { "name": "John Doe", "email": "john.doe@example.com" },
+    { "name": "Jane Smith", "email": "jane.smith@company.com" },
+    { "name": "Mike Johnson", "email": "mike.j@startup.io" },
+    { "name": "Sarah Williams", "email": "sarah.w@design.studio" },
+    { "name": "David Brown", "email": "david.brown@tech.com" },
+    { "name": "Emily Davis", "email": "emily.davis@marketing.co" },
+    { "name": "GitHub", "email": "noreply@github.com" },
+    { "name": "LinkedIn", "email": "notifications@linkedin.com" },
+    { "name": "Stack Overflow", "email": "no-reply@stackoverflow.com" },
+    { "name": "AWS Team", "email": "aws-billing@amazon.com" }
+  ],
+  "subjects": [
+    "Meeting Tomorrow at 10 AM",
+    "Q4 Project Update - Action Required",
+    "Welcome to our Platform!",
+    "Your invoice for November 2025",
+    "Code Review Request: PR #1234",
+    "Team Lunch Next Friday",
+    "Password Reset Confirmation",
+    "New Feature Release Notes",
+    "Weekly Newsletter - Tech Trends",
+    "Security Alert: Unusual Login Detected",
+    "Collaboration Request",
+    "Survey: How are we doing?",
+    "Reminder: Deadline Tomorrow",
+    "Congratulations on Your Achievement!",
+    "System Maintenance Scheduled"
+  ],
+  "folders": [
+    { "id": "inbox", "name": "Inbox", "icon": "📥", "color": "blue" },
+    { "id": "sent", "name": "Sent", "icon": "📤", "color": "green" },
+    { "id": "drafts", "name": "Drafts", "icon": "📝", "color": "yellow" },
+    { "id": "trash", "name": "Trash", "icon": "🗑️", "color": "red" }
+  ]
+}

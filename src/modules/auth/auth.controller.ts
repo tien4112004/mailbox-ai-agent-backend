@@ -1,0 +1,100 @@
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  UseGuards,
+  Request,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { AuthService } from './auth.service';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
+import { GoogleAuthDto } from './dto/google-auth.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+
+@ApiTags('auth')
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register a new user' })
+  @ApiResponse({ status: 201, description: 'User successfully registered' })
+  @ApiResponse({ status: 409, description: 'Email already exists' })
+  async register(@Body() registerDto: RegisterDto) {
+    return this.authService.register(registerDto);
+  }
+
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login with email and password' })
+  @ApiResponse({ status: 200, description: 'Successfully logged in' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  async login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
+  }
+
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login with Google' })
+  @ApiResponse({ status: 200, description: 'Successfully logged in with Google' })
+  @ApiResponse({ status: 401, description: 'Invalid Google token' })
+  async googleLogin(@Body() googleAuthDto: GoogleAuthDto) {
+    return this.authService.googleLogin(googleAuthDto.token);
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Refresh access token' })
+  @ApiResponse({ status: 200, description: 'Token successfully refreshed' })
+  @ApiResponse({ status: 401, description: 'Invalid refresh token' })
+  async refresh(@Body() body: { refreshToken: string }) {
+    const decoded = await this.authService['jwtService'].decode(
+      body.refreshToken,
+    );
+    return this.authService.refreshToken(decoded.sub, body.refreshToken);
+  }
+
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({ status: 200, description: 'User profile retrieved' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getProfile(@Request() req) {
+    const { password, refreshToken, ...userWithoutSensitive } = req.user;
+    return userWithoutSensitive;
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Logout user' })
+  @ApiResponse({ status: 200, description: 'Successfully logged out' })
+  async logout(@Request() req) {
+    return this.authService.logout(req.user.id);
+  }
+
+  @Get('google/gmail-url')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get Gmail OAuth URL' })
+  @ApiResponse({ status: 200, description: 'Gmail OAuth URL generated' })
+  getGmailAuthUrl() {
+    const url = this.authService.getGmailAuthUrl();
+    return { url };
+  }
+
+  @Post('google/gmail-callback')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Handle Gmail OAuth callback' })
+  @ApiResponse({ status: 200, description: 'Successfully authenticated with Gmail' })
+  @ApiResponse({ status: 401, description: 'Gmail authentication failed' })
+  async handleGmailCallback(@Body() body: { code: string }) {
+    return this.authService.handleGmailCallback(body.code);
+  }
+}
