@@ -9,6 +9,7 @@ import {
   HttpStatus,
   Query,
   Res,
+  Headers,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -86,7 +87,20 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get Gmail OAuth URL' })
   @ApiResponse({ status: 200, description: 'Gmail OAuth URL generated' })
-  getGmailAuthUrl(@Query('frontendUrl') frontendUrl?: string, @Request() req?: any) {
+  getGmailAuthUrl(
+    @Query('frontendUrl') frontendUrl?: string, 
+    @Request() req?: any,
+    @Headers('mock') mockHeader?: string
+  ) {
+    // Mock mode - return fake URL
+    if (mockHeader === 'true') {
+      return { 
+        data: { 
+          url: `${frontendUrl || 'http://localhost:5173'}?mock=true&auth=success` 
+        } 
+      };
+    }
+    
     // Use query param or referer header to detect frontend URL
     const detectedFrontendUrl = frontendUrl || req?.headers?.referer || req?.headers?.origin;
     const url = this.authService.getGmailAuthUrl(detectedFrontendUrl);

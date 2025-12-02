@@ -9,8 +9,9 @@ import {
   Request,
   Res,
   HttpStatus,
+  Headers,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { Response } from 'express';
 import { EmailsService } from './emails.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -18,6 +19,7 @@ import { GetEmailsDto } from './dto/get-emails.dto';
 import { SendEmailDto } from './dto/send-email.dto';
 import { ReplyEmailDto } from './dto/reply-email.dto';
 import { ModifyEmailDto } from './dto/modify-email.dto';
+import { mockEmails } from './mock-data';
 
 @ApiTags('emails')
 @Controller('emails')
@@ -44,6 +46,7 @@ export class EmailsController {
 
   @Get('list')
   @ApiOperation({ summary: 'Get emails with filters and pagination' })
+  @ApiHeader({ name: 'Mock', required: false, description: 'Set to "true" for mock data' })
   @ApiResponse({ 
     status: 200, 
     description: 'List of emails retrieved',
@@ -72,7 +75,25 @@ export class EmailsController {
       }
     }
   })
-  async getEmails(@Request() req, @Query() dto: GetEmailsDto) {
+  async getEmails(
+    @Request() req, 
+    @Query() dto: GetEmailsDto,
+    @Headers('mock') mockHeader?: string
+  ) {
+    // Mock mode - return fake emails
+    if (mockHeader === 'true') {
+      return {
+        emails: mockEmails,
+        pagination: {
+          total: mockEmails.length,
+          page: 1,
+          limit: 20,
+          totalPages: 1,
+          nextPageToken: null,
+        },
+      };
+    }
+    
     return this.emailsService.getEmails(req.user.id, dto);
   }
 

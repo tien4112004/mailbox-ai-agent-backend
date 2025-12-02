@@ -1,0 +1,180 @@
+export const mockEmails = [
+  {
+    id: 'mock-email-1',
+    threadId: 'mock-thread-1',
+    subject: 'Q4 2025 Project Roadmap Review',
+    from: { name: 'Sarah Johnson', email: 'sarah.johnson@company.com' },
+    to: ['you@example.com', 'team@company.com'],
+    cc: ['manager@company.com', 'cto@company.com'],
+    bcc: [],
+    date: new Date('2025-12-01T09:30:00Z').toISOString(),
+    snippet: 'Hi team, I wanted to share the updated Q4 roadmap with key milestones and deliverables...',
+    body: '<p>Hi team,</p><p>I wanted to share the updated Q4 roadmap with key milestones and deliverables. Please review and provide your feedback by EOD Friday.</p><p>Best regards,<br>Sarah</p>',
+    read: false,
+    starred: true,
+    labels: ['INBOX', 'IMPORTANT'],
+    attachments: []
+  },
+  {
+    id: 'mock-email-2',
+    threadId: 'mock-thread-2',
+    subject: 'Your Amazon.com order #123-4567890 has shipped',
+    from: { name: 'Amazon.com', email: 'ship-confirm@amazon.com' },
+    to: ['you@example.com'],
+    cc: [],
+    bcc: [],
+    date: new Date('2025-12-01T14:22:00Z').toISOString(),
+    snippet: 'Hello, Your package is on the way! Track your shipment to see the delivery status...',
+    body: '<p>Hello,</p><p>Your package is on the way! Track your shipment to see the delivery status.</p><p>Arriving: Dec 5, 2025</p><p>Tracking #: 1Z999AA10123456784</p>',
+    read: true,
+    starred: false,
+    labels: ['INBOX', 'CATEGORY_PURCHASES'],
+    attachments: []
+  },
+  {
+    id: 'mock-email-3',
+    threadId: 'mock-thread-3',
+    subject: 'Security Alert: New sign-in from Chrome on Windows',
+    from: { name: 'Google', email: 'no-reply@accounts.google.com' },
+    to: ['you@example.com'],
+    cc: [],
+    bcc: [],
+    date: new Date('2025-12-01T16:45:00Z').toISOString(),
+    snippet: 'Hi, A new device just signed in to your Google Account. If this was you, you don\'t need to do anything...',
+    body: '<p>Hi,</p><p>A new device just signed in to your Google Account.</p><p>Device: Chrome on Windows<br>Time: Dec 1, 2025, 4:45 PM<br>Location: San Francisco, CA, USA</p><p>If this was you, you don\'t need to do anything. If not, secure your account immediately.</p>',
+    read: false,
+    starred: false,
+    labels: ['INBOX', 'CATEGORY_UPDATES'],
+    attachments: []
+  },
+  {
+    id: 'mock-email-4',
+    threadId: 'mock-thread-4',
+    subject: 'Weekly Team Standup - Notes & Action Items',
+    from: { name: 'Michael Chen', email: 'michael.chen@company.com' },
+    to: ['you@example.com', 'dev-team@company.com', 'qa-team@company.com'],
+    cc: ['project-manager@company.com'],
+    bcc: ['stakeholders@company.com'],
+    date: new Date('2025-11-30T11:00:00Z').toISOString(),
+    snippet: 'Team, Here are the key takeaways from today\'s standup meeting...',
+    body: '<p>Team,</p><p>Here are the key takeaways from today\'s standup meeting:</p><ul><li>Sprint 23 completion: 85%</li><li>3 bugs fixed, 2 in progress</li><li>New feature deployment scheduled for Dec 5</li></ul><p>Action Items:<br>- John: Complete API integration testing<br>- Lisa: Review PR #456<br>- Mike: Update documentation</p>',
+    read: true,
+    starred: true,
+    labels: ['INBOX', 'CATEGORY_SOCIAL'],
+    attachments: [
+      { filename: 'standup-notes.pdf', mimeType: 'application/pdf', size: 45632 }
+    ]
+  },
+  {
+    id: 'mock-email-5',
+    threadId: 'mock-thread-5',
+    subject: 'Invoice #2025-1201 - Payment Due',
+    from: { name: 'Billing Department', email: 'billing@vendor.com' },
+    to: ['you@example.com', 'accounts@company.com'],
+    cc: ['finance@company.com'],
+    bcc: [],
+    date: new Date('2025-12-01T08:15:00Z').toISOString(),
+    snippet: 'Dear Customer, Please find attached invoice #2025-1201 for services rendered in November 2025...',
+    body: '<p>Dear Customer,</p><p>Please find attached invoice #2025-1201 for services rendered in November 2025.</p><p>Amount Due: $4,850.00<br>Due Date: December 15, 2025</p><p>Payment can be made via bank transfer or credit card.</p><p>Thank you for your business!</p>',
+    read: false,
+    starred: false,
+    labels: ['INBOX', 'IMPORTANT'],
+    attachments: [
+      { filename: 'invoice-2025-1201.pdf', mimeType: 'application/pdf', size: 128456 }
+    ]
+  },
+  {
+    id: 'mock-email-6',
+    threadId: 'mock-thread-6',
+    subject: '[URGENT] Production Server Alert - High Memory Usage',
+    from: { name: 'Monitoring System', email: 'alerts@monitoring.company.com' },
+    to: ['you@example.com', 'devops@company.com', 'oncall@company.com'],
+    cc: ['cto@company.com', 'engineering-leads@company.com'],
+    bcc: [],
+    date: new Date('2025-12-01T22:30:00Z').toISOString(),
+    snippet: 'ALERT: Production server prod-web-03 is experiencing high memory usage (94%)...',
+    body: '<p><strong>ALERT DETAILS</strong></p><p>Server: prod-web-03<br>Memory Usage: 94%<br>CPU Usage: 67%<br>Time: Dec 1, 2025, 10:30 PM UTC</p><p>Action required: Please investigate and take corrective action.</p><p>Auto-scaling triggered: Yes<br>New instance starting: prod-web-04</p>',
+    read: true,
+    starred: true,
+    labels: ['INBOX', 'IMPORTANT', 'CATEGORY_UPDATES'],
+    attachments: []
+  },
+  {
+    id: 'mock-email-7',
+    threadId: 'mock-thread-7',
+    subject: 'Your Netflix subscription payment was successful',
+    from: { name: 'Netflix', email: 'info@mailer.netflix.com' },
+    to: ['you@example.com'],
+    cc: [],
+    bcc: [],
+    date: new Date('2025-11-29T12:00:00Z').toISOString(),
+    snippet: 'Hi, Your Netflix membership was successfully renewed on November 29, 2025...',
+    body: '<p>Hi,</p><p>Your Netflix membership was successfully renewed on November 29, 2025.</p><p>Plan: Premium (4K + HDR)<br>Amount: $19.99<br>Next billing date: December 29, 2025</p><p>Payment method: Visa ending in 4242</p><p>Enjoy watching!</p>',
+    read: true,
+    starred: false,
+    labels: ['INBOX', 'CATEGORY_UPDATES'],
+    attachments: []
+  },
+  {
+    id: 'mock-email-8',
+    threadId: 'mock-thread-8',
+    subject: 'Invitation: Company Holiday Party 🎄',
+    from: { name: 'HR Team', email: 'hr@company.com' },
+    to: ['all-employees@company.com'],
+    cc: ['you@example.com', 'events@company.com'],
+    bcc: ['external-partners@company.com'],
+    date: new Date('2025-11-28T15:30:00Z').toISOString(),
+    snippet: 'Dear Team, You\'re invited to our annual holiday party! Join us for food, drinks, and celebration...',
+    body: '<p>Dear Team,</p><p>You\'re invited to our annual holiday party!</p><p>📅 Date: December 20, 2025<br>🕐 Time: 6:00 PM - 10:00 PM<br>📍 Location: Grand Ballroom, Hilton Downtown</p><p>Dress code: Smart casual<br>RSVP by: December 10, 2025</p><p>Looking forward to celebrating with you all!</p>',
+    read: false,
+    starred: true,
+    labels: ['INBOX', 'CATEGORY_SOCIAL'],
+    attachments: []
+  },
+  {
+    id: 'mock-email-9',
+    threadId: 'mock-thread-9',
+    subject: 'Code Review Request: Feature/user-authentication',
+    from: { name: 'Emily Rodriguez', email: 'emily.rodriguez@company.com' },
+    to: ['you@example.com', 'senior-devs@company.com'],
+    cc: ['tech-lead@company.com'],
+    bcc: [],
+    date: new Date('2025-12-01T17:45:00Z').toISOString(),
+    snippet: 'Hey team, I\'ve just pushed my changes for the new user authentication system. Could you please review PR #789?...',
+    body: '<p>Hey team,</p><p>I\'ve just pushed my changes for the new user authentication system. Could you please review PR #789?</p><p>Changes include:<br>- JWT token implementation<br>- OAuth2 Google integration<br>- Password reset flow<br>- Unit tests (95% coverage)</p><p>GitHub: https://github.com/company/project/pull/789</p><p>Thanks!</p>',
+    read: true,
+    starred: false,
+    labels: ['INBOX', 'CATEGORY_SOCIAL'],
+    attachments: []
+  },
+  {
+    id: 'mock-email-10',
+    threadId: 'mock-thread-10',
+    subject: 'Meeting Reminder: Q4 Performance Review',
+    from: { name: 'Calendar Bot', email: 'calendar@company.com' },
+    to: ['you@example.com'],
+    cc: ['your-manager@company.com', 'hr-business-partner@company.com'],
+    bcc: [],
+    date: new Date('2025-12-02T07:00:00Z').toISOString(),
+    snippet: 'This is a reminder that you have a meeting scheduled for today at 2:00 PM...',
+    body: '<p>This is a reminder that you have a meeting scheduled for today:</p><p><strong>Q4 Performance Review</strong><br>📅 December 2, 2025<br>🕐 2:00 PM - 3:00 PM<br>📍 Conference Room B / Zoom Link: https://zoom.us/j/123456789</p><p>Attendees:<br>- You<br>- Your Manager<br>- HR Business Partner</p><p>Please prepare your self-assessment beforehand.</p>',
+    read: false,
+    starred: true,
+    labels: ['INBOX', 'IMPORTANT', 'CATEGORY_UPDATES'],
+    attachments: [
+      { filename: 'self-assessment-template.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size: 34567 }
+    ]
+  }
+];
+
+export const mockUser = {
+  id: 'mock-user-123',
+  email: 'mock.user@example.com',
+  name: 'Mock User',
+  role: 'user',
+};
+
+export const mockTokens = {
+  accessToken: 'mock-jwt-access-token-' + Date.now(),
+  refreshToken: 'mock-jwt-refresh-token-' + Date.now(),
+};
