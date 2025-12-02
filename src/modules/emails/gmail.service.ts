@@ -20,7 +20,7 @@ export class GmailService {
   /**
    * Get OAuth2 URL for user to authorize Gmail access
    */
-  getAuthUrl(): string {
+  getAuthUrl(state?: string): string {
     const scopes = [
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/gmail.modify',
@@ -34,6 +34,7 @@ export class GmailService {
       access_type: 'offline',
       scope: scopes,
       prompt: 'consent', // Force to get refresh token
+      state: state, // Pass frontend URL to get it back in callback
     });
   }
 

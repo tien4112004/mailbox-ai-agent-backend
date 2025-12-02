@@ -7,6 +7,8 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  Query,
+  Res,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -84,17 +86,52 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get Gmail OAuth URL' })
   @ApiResponse({ status: 200, description: 'Gmail OAuth URL generated' })
-  getGmailAuthUrl() {
-    const url = this.authService.getGmailAuthUrl();
-    return { url };
+  getGmailAuthUrl(@Query('frontendUrl') frontendUrl?: string, @Request() req?: any) {
+    // Use query param or referer header to detect frontend URL
+    const detectedFrontendUrl = frontendUrl || req?.headers?.referer || req?.headers?.origin;
+    const url = this.authService.getGmailAuthUrl(detectedFrontendUrl);
+    return { data: { url } };
   }
 
-  @Post('google/gmail-callback')
-  @HttpCode(HttpStatus.OK)
+  @Get('google/gmail-callback')
   @ApiOperation({ summary: 'Handle Gmail OAuth callback' })
   @ApiResponse({ status: 200, description: 'Successfully authenticated with Gmail' })
   @ApiResponse({ status: 401, description: 'Gmail authentication failed' })
-  async handleGmailCallback(@Body() body: { code: string }) {
-    return this.authService.handleGmailCallback(body.code);
+  async handleGmailCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Res({ passthrough: false }) res: any
+  ) {
+    try {
+      const result = await this.authService.handleGmailCallback(code);
+      
+      // Decode frontend URL from state parameter
+      let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      
+      if (state) {
+        try {
+          frontendUrl = Buffer.from(state, 'base64').toString('utf-8');
+        } catch (e) {
+          // If state decode fails, use default
+        }
+      }
+      
+      const data = encodeURIComponent(JSON.stringify(result));
+      
+      // Redirect back to where the user came from
+      return res.redirect(`${frontendUrl}?auth=success#${data}`);
+    } catch (error) {
+      let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      
+      if (state) {
+        try {
+          frontendUrl = Buffer.from(state, 'base64').toString('utf-8');
+        } catch (e) {
+          // If state decode fails, use default
+        }
+      }
+      
+      return res.redirect(`${frontendUrl}?auth=error&message=${encodeURIComponent(error.message)}`);
+    }
   }
 }
