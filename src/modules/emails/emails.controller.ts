@@ -28,14 +28,50 @@ export class EmailsController {
 
   @Get('mailboxes')
   @ApiOperation({ summary: 'Get all mailboxes (Gmail labels)' })
-  @ApiResponse({ status: 200, description: 'List of mailboxes retrieved' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'List of mailboxes retrieved',
+    schema: {
+      example: [
+        { id: 'INBOX', name: 'INBOX', messagesTotal: 42, messagesUnread: 5 },
+        { id: 'SENT', name: 'Sent', messagesTotal: 120, messagesUnread: 0 }
+      ]
+    }
+  })
   async getMailboxes(@Request() req) {
     return this.emailsService.getMailboxes(req.user.id);
   }
 
   @Get('list')
   @ApiOperation({ summary: 'Get emails with filters and pagination' })
-  @ApiResponse({ status: 200, description: 'List of emails retrieved' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'List of emails retrieved',
+    schema: {
+      example: {
+        emails: [
+          {
+            id: '18f2a1b3c4d5e6f7',
+            threadId: '18f2a1b3c4d5e6f7',
+            subject: 'Meeting Tomorrow',
+            from: { name: 'John Doe', email: 'john@example.com' },
+            to: ['you@example.com'],
+            date: '2025-12-02T10:30:00.000Z',
+            snippet: 'Hi, let\'s meet tomorrow at 10 AM...',
+            read: false,
+            starred: false
+          }
+        ],
+        pagination: {
+          total: 100,
+          page: 1,
+          limit: 20,
+          totalPages: 5,
+          nextPageToken: 'token123'
+        }
+      }
+    }
+  })
   async getEmails(@Request() req, @Query() dto: GetEmailsDto) {
     return this.emailsService.getEmails(req.user.id, dto);
   }
@@ -50,7 +86,17 @@ export class EmailsController {
 
   @Post('send')
   @ApiOperation({ summary: 'Send a new email' })
-  @ApiResponse({ status: 200, description: 'Email sent successfully' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Email sent successfully',
+    schema: {
+      example: {
+        id: '18f2a1b3c4d5e6f7',
+        threadId: '18f2a1b3c4d5e6f7',
+        labelIds: ['SENT']
+      }
+    }
+  })
   async sendEmail(@Request() req, @Body() dto: SendEmailDto) {
     return this.emailsService.sendEmail(req.user.id, dto);
   }
@@ -68,7 +114,17 @@ export class EmailsController {
 
   @Post(':id/modify')
   @ApiOperation({ summary: 'Modify email (read, star, trash, labels)' })
-  @ApiResponse({ status: 200, description: 'Email modified successfully' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Email modified successfully',
+    schema: {
+      example: {
+        id: '18f2a1b3c4d5e6f7',
+        labelIds: ['INBOX', 'UNREAD'],
+        success: true
+      }
+    }
+  })
   async modifyEmail(
     @Request() req,
     @Param('id') id: string,

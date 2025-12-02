@@ -170,8 +170,9 @@ export class AuthService {
   /**
    * Get Gmail OAuth URL
    */
-  getGmailAuthUrl(): string {
-    return this.gmailService.getAuthUrl();
+  getGmailAuthUrl(frontendUrl?: string): string {
+    const state = frontendUrl ? Buffer.from(frontendUrl).toString('base64') : '';
+    return this.gmailService.getAuthUrl(state);
   }
 
   /**
