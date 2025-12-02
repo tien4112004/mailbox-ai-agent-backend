@@ -28,8 +28,8 @@ export class Email {
   @Column({ name: 'from_email' })
   fromEmail: string;
 
-  @Column('simple-array')
-  to: string[];
+  @Column('simple-array', { name: 'to_email' })
+  toEmail: string[];
 
   @Column({ default: false })
   read: boolean;

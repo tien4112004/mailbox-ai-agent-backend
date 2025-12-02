@@ -5,8 +5,8 @@ export default registerAs('app', () => ({
   apiPrefix: process.env.API_PREFIX || 'api',
   nodeEnv: process.env.NODE_ENV || 'development',
   cors: {
-    origin: process.env.CORS_ORIGIN || '*',
-    credentials: process.env.CORS_CREDENTIALS === 'true' || true,
+    origin: '*',
+    credentials: false,
   },
   swagger: {
     enabled:

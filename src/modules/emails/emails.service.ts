@@ -63,7 +63,11 @@ export class EmailsService {
       throw new NotFoundException('Email not found');
     }
 
-    return email;
+    // Map 'to' field from Gmail API to 'toEmail' for database
+    return {
+      ...email,
+      toEmail: email.to,
+    };
   }
 
   async sendEmail(userId: string, dto: SendEmailDto) {
@@ -98,7 +102,7 @@ export class EmailsService {
 
     // Prepare reply
     const to = dto.replyAll 
-      ? [originalEmail.from.email, ...originalEmail.to.filter(addr => addr !== originalEmail.from.email)]
+      ? [originalEmail.from.email, ...originalEmail.to.filter((addr: string) => addr !== originalEmail.from.email)]
       : [originalEmail.from.email];
     
     const cc = dto.replyAll ? originalEmail.cc : (dto.cc || []);
