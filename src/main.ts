@@ -21,10 +21,10 @@ async function bootstrap() {
   );
   app.use(compression());
 
-  // CORS
+  // CORS - Allow all origins
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || '*',
-    credentials: process.env.CORS_CREDENTIALS === 'true' || true,
+    origin: '*', // Allow all origins
+    credentials: false,
   });
 
   // Global prefix

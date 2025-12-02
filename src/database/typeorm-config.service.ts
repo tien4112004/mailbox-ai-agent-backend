@@ -8,20 +8,16 @@ export default registerAs(
     const config = databaseConfig();
     
     return {
-      type: config.type as any,
-      host: config.host,
-      port: config.port,
-      username: config.username,
-      password: config.password,
-      database: config.name,
+      type: 'postgres',
+      url: config.url,
       entities: [__dirname + '/../**/*.entity{.ts,.js}'],
       logging: process.env.NODE_ENV === 'development',
       migrations: [__dirname + '/../database/migrations/*{.ts,.js}'],
       migrationsTableName: 'migrations',
       migrationsRun: false,
-      synchronize: process.env.NODE_ENV === 'development', // Auto-create tables in development
+      synchronize: process.env.NODE_ENV === 'development',
       extra: {
-        max: config.maxConnections,
+        max: 100,
         ssl: config.sslEnabled ? {
           rejectUnauthorized: config.rejectUnauthorized,
           ca: config.ca,
