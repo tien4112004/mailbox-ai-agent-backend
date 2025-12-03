@@ -12,14 +12,14 @@ export default registerAs('app', () => ({
     enabled:
       process.env.SWAGGER_ENABLED === 'true' ||
       process.env.NODE_ENV !== 'production',
-    title: process.env.SWAGGER_TITLE || 'Student API',
+    title: process.env.SWAGGER_TITLE || 'Email API',
     description:
-      process.env.SWAGGER_DESCRIPTION || 'Student Management API Documentation',
+      process.env.SWAGGER_DESCRIPTION || 'API Documentation',
     version: process.env.SWAGGER_VERSION || '1.0.0',
-    tag: process.env.SWAGGER_TAG || 'student-api',
+    tag: process.env.SWAGGER_TAG || 'email-api ',
   },
   stack: {
-    url: process.env.STACK_URL || 'https://id.student360.asia',
+    url: process.env.STACK_URL || 'https://test.com',
     projectId: process.env.STACK_PROJECT_ID || '',
     secretServerKey: process.env.STACK_SECRET_SERVER_KEY || '',
     publishableClientKey: process.env.STACK_SECRET_CLIENT_KEY || '',

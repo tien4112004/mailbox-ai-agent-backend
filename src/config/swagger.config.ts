@@ -1,10 +1,10 @@
 import { DocumentBuilder } from '@nestjs/swagger';
 
 export const swaggerConfig = new DocumentBuilder()
-  .setTitle('Student API')
-  .setDescription('Student Management API Documentation')
+  .setTitle('Email API')
+  .setDescription('API Documentation')
   .setVersion('1.0.0')
-  .addTag('student-api')
+  .addTag('email-api')
   .addBearerAuth(
     {
       type: 'http',
