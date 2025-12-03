@@ -6,6 +6,9 @@ import { ModifyEmailDto } from './dto/modify-email.dto';
 import { GmailService } from './gmail.service';
 import { AuthService } from '../auth/auth.service';
 
+// In-memory cache for page tokens (key: userId-folder-limit, value: page -> token map)
+const pageTokenCache = new Map<string, Map<number, string>>();
+
 @Injectable()
 export class EmailsService {
   constructor(
@@ -27,16 +30,39 @@ export class EmailsService {
   async getEmails(userId: string, dto: GetEmailsDto) {
     const tokens = await this.authService.getGmailTokens(userId);
     
-    const { folder = 'INBOX', search, page = 1, limit = 20 } = dto;
+    let { folder = 'INBOX', search, page = 1, limit = 20, pageToken } = dto;
+    
+    // Normalize folder to uppercase (Gmail labels are case-sensitive)
+    folder = folder.toUpperCase();
+
+    // Create cache key
+    const cacheKey = `${userId}-${folder}-${limit}`;
+    
+    // If page > 1 and no pageToken provided, try to get from cache
+    if (page > 1 && !pageToken) {
+      const userCache = pageTokenCache.get(cacheKey);
+      if (userCache) {
+        pageToken = userCache.get(page);
+      }
+    }
 
     const result = await this.gmailService.listEmails(
       tokens.accessToken,
       tokens.refreshToken,
       folder,
       limit,
-      undefined, // pageToken - can be implemented later
+      pageToken,
       search,
     );
+
+    // Store next page token in cache
+    if (result.nextPageToken) {
+      if (!pageTokenCache.has(cacheKey)) {
+        pageTokenCache.set(cacheKey, new Map());
+      }
+      const userCache = pageTokenCache.get(cacheKey);
+      userCache.set(page + 1, result.nextPageToken);
+    }
 
     return {
       emails: result.emails,

@@ -26,4 +26,9 @@ export class GetEmailsDto {
   @IsInt()
   @Min(1)
   limit?: number = 20;
+
+  @ApiPropertyOptional({ example: 'ABCDEFtoken123', description: 'Token for next page from previous response' })
+  @IsOptional()
+  @IsString()
+  pageToken?: string;
 }
