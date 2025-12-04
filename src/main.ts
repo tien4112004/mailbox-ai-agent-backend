@@ -20,10 +20,12 @@ async function bootstrap() {
   );
   app.use(compression());
 
-  // CORS - Allow all origins
+  // CORS - Allow all origins with credentials
   app.enableCors({
-    origin: '*', // Allow all origins
-    credentials: false,
+    origin: (origin, callback) => {
+      callback(null, true);
+    },
+    credentials: true,
   });
 
   // Global prefix
