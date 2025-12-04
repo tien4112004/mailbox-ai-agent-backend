@@ -2,6 +2,8 @@
 marp: true
 theme: default
 paginate: true
+header: Spec-kit
+footer: 22120134-22120368-22120370
 backgroundColor: #fff
 style: |
   section {
@@ -21,6 +23,10 @@ style: |
 
 # Spec-kit
 ## The Future of Spec-Driven Development
+### Team:
+- Hoàng Tiến Huy - 22120134
+- Phan Thanh Tiến - 22120368
+- Nguyễn Bùi Vương Tiễn - 22120370
 
 ---
 
