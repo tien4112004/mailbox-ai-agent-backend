@@ -33,4 +33,7 @@ export default registerAs('app', () => ({
     urlReset:
       process.env.STACK_URL_RESET || 'http://localhost:4000/auth/forgot',
   },
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY || '',
+  },
 }));
