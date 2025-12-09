@@ -10,15 +10,20 @@ import {
   Res,
   HttpStatus,
   Headers,
+  Put,
+  Delete,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { Response } from 'express';
 import { EmailsService } from './emails.service';
+import { SnoozeService } from './snooze.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetEmailsDto } from './dto/get-emails.dto';
 import { SendEmailDto } from './dto/send-email.dto';
 import { ReplyEmailDto } from './dto/reply-email.dto';
 import { ModifyEmailDto } from './dto/modify-email.dto';
+import { SnoozeEmailDto } from './dto/snooze-email.dto';
+import { GetSnoozesDto } from './dto/get-snoozes.dto';
 import { mockEmails } from './mock-data';
 
 @ApiTags('emails')
@@ -26,7 +31,10 @@ import { mockEmails } from './mock-data';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('access-token')
 export class EmailsController {
-  constructor(private readonly emailsService: EmailsService) {}
+  constructor(
+    private readonly emailsService: EmailsService,
+    private readonly snoozeService: SnoozeService,
+  ) {}
 
   @Get('mailboxes')
   @ApiOperation({ summary: 'Get all mailboxes (Gmail labels)' })
@@ -211,5 +219,163 @@ export class EmailsController {
   @ApiOperation({ summary: 'Toggle email star (legacy)' })
   async toggleStar(@Request() req, @Param('id') id: string) {
     return this.emailsService.toggleStar(req.user.id, id);
+  }
+
+  // ==================== SNOOZE ENDPOINTS ====================
+
+  @Post(':gmailMessageId/snooze')
+  @ApiOperation({ summary: 'Snooze an email until a specified time' })
+  @ApiResponse({
+    status: 200,
+    description: 'Email snoozed successfully',
+    schema: {
+      example: {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        emailId: 'email-123',
+        gmailMessageId: 'gmail-msg-123',
+        userId: 'user-123',
+        status: 'snoozed',
+        snoozeUntil: '2025-12-15T09:00:00Z',
+        snoozeReason: 'Follow up later',
+        isRecurring: false,
+        createdAt: '2025-12-09T10:00:00Z',
+      },
+    },
+  })
+  async snoozeEmail(
+    @Request() req,
+    @Param('gmailMessageId') gmailMessageId: string,
+    @Body() dto: SnoozeEmailDto,
+  ) {
+    // Extract email ID from Gmail message ID (simplified approach)
+    const emailId = gmailMessageId;
+    return this.snoozeService.snoozeEmail(
+      req.user.id,
+      emailId,
+      gmailMessageId,
+      dto,
+    );
+  }
+
+  @Get('snoozed/list')
+  @ApiOperation({ summary: 'Get all snoozed emails for the user' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of snoozed emails retrieved',
+  })
+  async getSnoozedEmails(
+    @Request() req,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+  ) {
+    return this.snoozeService.getSnoozedEmails(req.user.id, page, limit);
+  }
+
+  @Get('snoozed/upcoming')
+  @ApiOperation({ summary: 'Get upcoming snoozed emails (within N days)' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of upcoming snoozed emails',
+  })
+  async getUpcomingSnoozed(
+    @Request() req,
+    @Query('daysAhead') daysAhead: number = 7,
+  ) {
+    return this.snoozeService.getUpcomingSnoozed(req.user.id, daysAhead);
+  }
+
+  @Get('snoozed/count')
+  @ApiOperation({ summary: 'Get count of snoozed emails' })
+  @ApiResponse({
+    status: 200,
+    description: 'Count of snoozed emails',
+    schema: {
+      example: { count: 5 },
+    },
+  })
+  async getSnoozeCount(@Request() req) {
+    const count = await this.snoozeService.countSnoozes(req.user.id);
+    return { count };
+  }
+
+  @Get('snoozed/history')
+  @ApiOperation({ summary: 'Get snooze history (all snoozes)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Snooze history retrieved',
+  })
+  async getSnoozeHistory(
+    @Request() req,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+  ) {
+    return this.snoozeService.getSnoozeHistory(req.user.id, page, limit);
+  }
+
+  @Get('snoozed/:snoozeId')
+  @ApiOperation({ summary: 'Get details of a specific snooze' })
+  @ApiResponse({
+    status: 200,
+    description: 'Snooze details retrieved',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Snooze record not found',
+  })
+  async getSnoozeDetails(
+    @Request() req,
+    @Param('snoozeId') snoozeId: string,
+  ) {
+    return this.snoozeService.getSnoozeDetails(req.user.id, snoozeId);
+  }
+
+  @Put('snoozed/:snoozeId/time')
+  @ApiOperation({ summary: 'Update snooze time for an existing snooze' })
+  @ApiResponse({
+    status: 200,
+    description: 'Snooze time updated successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Snooze record not found',
+  })
+  async updateSnoozeTime(
+    @Request() req,
+    @Param('snoozeId') snoozeId: string,
+    @Body() body: { newSnoozeUntil: string },
+  ) {
+    return this.snoozeService.updateSnoozeTime(
+      req.user.id,
+      snoozeId,
+      body.newSnoozeUntil,
+    );
+  }
+
+  @Post('snoozed/:snoozeId/resume')
+  @ApiOperation({ summary: 'Resume a snoozed email (bring back to inbox)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Snoozed email resumed successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Snooze record not found',
+  })
+  async resumeSnooze(@Request() req, @Param('snoozeId') snoozeId: string) {
+    return this.snoozeService.resumeSnooze(req.user.id, snoozeId);
+  }
+
+  @Post('snoozed/:snoozeId/cancel')
+  @ApiOperation({ summary: 'Cancel a snooze' })
+  @ApiResponse({
+    status: 200,
+    description: 'Snooze cancelled successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Snooze record not found',
+  })
+  async cancelSnooze(@Request() req, @Param('snoozeId') snoozeId: string) {
+    return this.snoozeService.cancelSnooze(req.user.id, snoozeId);
   }
 }
