@@ -12,49 +12,24 @@ export interface AIProviderConfig {
   model: string;
 }
 
-/**
- * Interface for AI summary providers (OpenAI, Gemini, Claude, etc.)
- * Implementing classes should handle all API communication and formatting
- */
 export interface IAISummaryProvider {
-  /**
-   * Check if provider is properly configured
-   */
   isConfigured(): boolean;
 
-  /**
-   * Generate a summary for email content
-   * @param emailContent - Email content to summarize
-   * @param options - Summary options (length, tone, custom instructions)
-   * @returns Generated summary text
-   */
   generateSummary(
     emailContent: EmailContent,
     options: SummarizeEmailDto,
   ): Promise<string>;
 
-  /**
-   * Get provider name
-   */
   getProviderName(): string;
 
-  /**
-   * Get current model being used
-   */
   getModel(): string;
 }
 
-/**
- * Supported AI providers
- */
 export enum AIProvider {
   OPENAI = 'openai',
   GEMINI = 'gemini',
 }
 
-/**
- * Base class providing common functionality for all providers
- */
 export abstract class BaseAISummaryProvider implements IAISummaryProvider {
   protected readonly logger: any; // Logger will be injected by NestJS
   protected config: AIProviderConfig;
@@ -75,9 +50,6 @@ export abstract class BaseAISummaryProvider implements IAISummaryProvider {
     return !!this.config?.apiKey;
   }
 
-  /**
-   * Builds an effective prompt for email summarization with context and constraints
-   */
   protected buildPrompt(
     emailContent: EmailContent,
     options: SummarizeEmailDto,
@@ -114,9 +86,6 @@ RESPONSE FORMAT:
 Provide only the summary without any preamble or explanation. Start directly with the summary.`;
   }
 
-  /**
-   * Get length-specific instructions for the prompt
-   */
   protected getLengthInstructions(length?: SummaryLength): string {
     switch (length) {
       case SummaryLength.SHORT:
@@ -129,9 +98,6 @@ Provide only the summary without any preamble or explanation. Start directly wit
     }
   }
 
-  /**
-   * Get tone-specific instructions for the prompt
-   */
   protected getToneInstructions(tone?: SummaryTone): string {
     switch (tone) {
       case SummaryTone.FORMAL:
@@ -145,9 +111,6 @@ Provide only the summary without any preamble or explanation. Start directly wit
     }
   }
 
-  /**
-   * Sanitize email body by removing excessive whitespace and common email artifacts
-   */
   protected sanitizeEmailBody(body: string): string {
     if (!body) return '';
 
