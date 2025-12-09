@@ -272,8 +272,12 @@ export class EmailsService {
       date: email.date,
     };
 
-    // Generate summary using the SummaryService
-    const summary = await summaryService.generateSummary(emailContent, dto);
+    // Generate summary using the SummaryService with optional provider override
+    const summary = await summaryService.generateSummary(
+      emailContent,
+      dto,
+      dto.provider,
+    );
 
     return {
       id: emailId,
@@ -282,6 +286,7 @@ export class EmailsService {
       summary,
       length: dto.length,
       tone: dto.tone,
+      provider: dto.provider,
     };
   }
 }

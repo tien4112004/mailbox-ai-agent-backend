@@ -6,13 +6,20 @@ import { EmailsService } from './emails.service';
 import { SnoozeService } from './snooze.service';
 import { SummaryService } from './summary.service';
 import { GmailService } from './gmail.service';
+import { AIProviderFactory } from './providers/ai-provider.factory';
 import { AuthModule } from '../auth/auth.module';
 import { Snooze } from '../../database/entities/snooze.entity';
 
 @Module({
   imports: [forwardRef(() => AuthModule), ConfigModule, TypeOrmModule.forFeature([Snooze])],
   controllers: [EmailsController],
-  providers: [EmailsService, SnoozeService, GmailService, SummaryService],
-  exports: [GmailService, SnoozeService, SummaryService],
+  providers: [
+    EmailsService,
+    SnoozeService,
+    GmailService,
+    SummaryService,
+    AIProviderFactory,
+  ],
+  exports: [GmailService, SnoozeService, SummaryService, AIProviderFactory],
 })
 export class EmailsModule {}

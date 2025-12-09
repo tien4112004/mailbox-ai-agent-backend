@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { AIProvider } from '../providers';
 
 export enum SummaryLength {
   SHORT = 'short',
@@ -40,4 +41,13 @@ export class SummarizeEmailDto {
   @IsString()
   @IsOptional()
   customInstructions?: string;
+
+  @ApiProperty({
+    enum: AIProvider,
+    description: 'Optional specific AI provider to use (overrides default)',
+    required: false,
+  })
+  @IsEnum(AIProvider)
+  @IsOptional()
+  provider?: AIProvider;
 }
