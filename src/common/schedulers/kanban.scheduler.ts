@@ -8,10 +8,14 @@ export class KanbanSchedulerService {
 
   constructor(private kanbanService: KanbanService) {}
 
-  @Cron('0 2 */3 * *')
+  /**
+   * Run every day at 2 AM to clean up cards older than 3 days
+   * Cron: "0 2 * * *" = At 2:00 AM every day
+   */
+  @Cron('0 2 * * *')
   async cleanupOldCards() {
     try {
-      this.logger.log('Starting Kanban cleanup job - removing cards older than 3 days');
+      this.logger.log('Starting daily Kanban cleanup job - removing cards older than 3 days');
       const removedCount = await this.kanbanService.cleanupOldCards();
       this.logger.log(`Kanban cleanup completed: Removed ${removedCount} old cards`);
     } catch (error) {

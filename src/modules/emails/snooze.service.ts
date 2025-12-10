@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual } from 'typeorm';
 import { Snooze, SnoozeStatus } from '../../database/entities/snooze.entity';
+import { Email } from '../../database/entities/email.entity';
 import { SnoozeEmailDto } from './dto/snooze-email.dto';
 import { GmailService } from './gmail.service';
 import { AuthService } from '../auth/auth.service';
@@ -12,6 +13,8 @@ export class SnoozeService {
   constructor(
     @InjectRepository(Snooze)
     private snoozeRepository: Repository<Snooze>,
+    @InjectRepository(Email)
+    private emailRepository: Repository<Email>,
     private gmailService: GmailService,
     private authService: AuthService,
   ) {}
@@ -34,28 +37,50 @@ export class SnoozeService {
       );
     }
 
-    const tokens = await this.authService.getGmailTokens(userId);
+    // UUID regex to detect database emails vs Gmail message IDs
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isDbEmail = uuidRegex.test(gmailMessageId);
 
-    // Get the current email to preserve its labels
-    const email = await this.gmailService.getEmailById(
-      tokens.accessToken,
-      tokens.refreshToken,
-      gmailMessageId,
-    );
+    let originalLabels = [];
+    let originalFolder = 'INBOX';
 
-    const originalLabels = email.labelIds || [];
+    if (!isDbEmail) {
+      // For Gmail emails, fetch from Gmail API and get labels
+      const tokens = await this.authService.getGmailTokens(userId);
 
-    // Remove from inbox and archive (move to a snoozed state)
-    const labelsToRemove = ['INBOX', 'UNREAD'];
-    const labelsToAdd = ['SNOOZED']; // Custom label for snoozed emails
+      const email = await this.gmailService.getEmailById(
+        tokens.accessToken,
+        tokens.refreshToken,
+        gmailMessageId,
+      );
 
-    await this.gmailService.modifyEmail(
-      tokens.accessToken,
-      tokens.refreshToken,
-      gmailMessageId,
-      labelsToAdd,
-      labelsToRemove,
-    );
+      originalLabels = email.labelIds || [];
+      originalFolder = email.labelIds?.includes('SENT') ? 'SENT' : 'INBOX';
+
+      // Remove from inbox and archive (move to a snoozed state)
+      const labelsToRemove = ['INBOX', 'UNREAD'];
+      const labelsToAdd = ['SNOOZED']; // Custom label for snoozed emails
+
+      await this.gmailService.modifyEmail(
+        tokens.accessToken,
+        tokens.refreshToken,
+        gmailMessageId,
+        labelsToAdd,
+        labelsToRemove,
+      );
+    } else {
+      // For database emails, just get the folder from the database
+      const dbEmail = await this.emailRepository.findOne({
+        where: { id: gmailMessageId, userId },
+      });
+
+      if (!dbEmail) {
+        throw new NotFoundException('Email not found');
+      }
+
+      originalFolder = dbEmail.folder || 'INBOX';
+      // Database emails don't have Gmail labels, leave originalLabels empty
+    }
 
     // Create snooze record
     const snooze = this.snoozeRepository.create({
@@ -67,7 +92,7 @@ export class SnoozeService {
       originalLabels: originalLabels.filter(
         (label) => label !== 'INBOX' && label !== 'UNREAD',
       ),
-      originalFolder: 'INBOX',
+      originalFolder,
       snoozeReason: dto.snoozeReason,
       isRecurring: dto.isRecurring || false,
       recurrencePattern: dto.recurrencePattern,
@@ -94,19 +119,27 @@ export class SnoozeService {
       );
     }
 
-    const tokens = await this.authService.getGmailTokens(userId);
+    // UUID regex to detect database emails vs Gmail message IDs
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isDbEmail = uuidRegex.test(snooze.gmailMessageId);
 
-    // Restore original labels
-    const labelsToAdd = ['INBOX', ...snooze.originalLabels];
-    const labelsToRemove = ['SNOOZED'];
+    if (!isDbEmail) {
+      // For Gmail emails, restore labels
+      const tokens = await this.authService.getGmailTokens(userId);
 
-    await this.gmailService.modifyEmail(
-      tokens.accessToken,
-      tokens.refreshToken,
-      snooze.gmailMessageId,
-      labelsToAdd,
-      labelsToRemove,
-    );
+      // Restore original labels
+      const labelsToAdd = ['INBOX', ...snooze.originalLabels];
+      const labelsToRemove = ['SNOOZED'];
+
+      await this.gmailService.modifyEmail(
+        tokens.accessToken,
+        tokens.refreshToken,
+        snooze.gmailMessageId,
+        labelsToAdd,
+        labelsToRemove,
+      );
+    }
+    // For database emails, no label restoration needed
 
     // Update snooze status
     snooze.status = SnoozeStatus.RESUMED;
@@ -135,14 +168,17 @@ export class SnoozeService {
 
       await this.snoozeRepository.save(nextSnooze);
       
-      // Move back to snoozed state for the next occurrence
-      await this.gmailService.modifyEmail(
-        tokens.accessToken,
-        tokens.refreshToken,
-        snooze.gmailMessageId,
-        ['SNOOZED'],
-        ['INBOX', 'UNREAD', ...snooze.originalLabels],
-      );
+      if (!isDbEmail) {
+        // For Gmail emails, move back to snoozed state for the next occurrence
+        const tokens = await this.authService.getGmailTokens(userId);
+        await this.gmailService.modifyEmail(
+          tokens.accessToken,
+          tokens.refreshToken,
+          snooze.gmailMessageId,
+          ['SNOOZED'],
+          ['INBOX', 'UNREAD', ...snooze.originalLabels],
+        );
+      }
     }
 
     return this.snoozeRepository.save(snooze);
