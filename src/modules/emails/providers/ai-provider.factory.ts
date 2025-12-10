@@ -36,16 +36,16 @@ export class AIProviderFactory {
     const geminiKey = this.configService.get<string>('GEMINI_API_KEY');
     const geminiModel = this.configService.get<string>(
       'GEMINI_MODEL',
-      'gemini-pro',
+      'gemini-2.5-flash-lite',
     );
     if (geminiKey) {
-      this.providers.set(
-        AIProvider.GEMINI,
-        new GeminiAdapter({
-          apiKey: geminiKey,
-          model: geminiModel,
-        }),
-      );
+      const geminiAdapter = new GeminiAdapter({
+        apiKey: geminiKey,
+        model: geminiModel,
+      });
+      // Register both 'gemini' and 'google' as aliases
+      this.providers.set(AIProvider.GEMINI, geminiAdapter);
+      this.providers.set(AIProvider.GOOGLE, geminiAdapter);
       this.logger.debug('Gemini provider initialized');
     }
 

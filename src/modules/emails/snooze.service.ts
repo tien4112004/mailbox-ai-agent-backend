@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual } from 'typeorm';
 import { Snooze, SnoozeStatus } from '../../database/entities/snooze.entity';
 import { Email } from '../../database/entities/email.entity';
+import { KanbanCard } from '../../database/entities/kanban-card.entity';
+import { KanbanColumn } from '../../database/entities/kanban-column.entity';
 import { SnoozeEmailDto } from './dto/snooze-email.dto';
 import { GmailService } from './gmail.service';
 import { AuthService } from '../auth/auth.service';
@@ -15,6 +17,10 @@ export class SnoozeService {
     private snoozeRepository: Repository<Snooze>,
     @InjectRepository(Email)
     private emailRepository: Repository<Email>,
+    @InjectRepository(KanbanCard)
+    private kanbanCardRepository: Repository<KanbanCard>,
+    @InjectRepository(KanbanColumn)
+    private kanbanColumnRepository: Repository<KanbanColumn>,
     private gmailService: GmailService,
     private authService: AuthService,
   ) {}
@@ -57,9 +63,10 @@ export class SnoozeService {
       originalLabels = email.labelIds || [];
       originalFolder = email.labelIds?.includes('SENT') ? 'SENT' : 'INBOX';
 
-      // Remove from inbox and archive (move to a snoozed state)
+      // Remove from inbox and unread (archive the email)
+      // Gmail doesn't have a built-in SNOOZED label, so we archive instead
       const labelsToRemove = ['INBOX', 'UNREAD'];
-      const labelsToAdd = ['SNOOZED']; // Custom label for snoozed emails
+      const labelsToAdd = []; // Archive by removing INBOX
 
       await this.gmailService.modifyEmail(
         tokens.accessToken,
@@ -81,6 +88,9 @@ export class SnoozeService {
       originalFolder = dbEmail.folder || 'INBOX';
       // Database emails don't have Gmail labels, leave originalLabels empty
     }
+
+    // Remove Kanban card for this email to hide it from the board
+    await this.kanbanCardRepository.delete({ emailId });
 
     // Create snooze record
     const snooze = this.snoozeRepository.create({
@@ -127,9 +137,9 @@ export class SnoozeService {
       // For Gmail emails, restore labels
       const tokens = await this.authService.getGmailTokens(userId);
 
-      // Restore original labels
+      // Restore email to inbox with original labels
       const labelsToAdd = ['INBOX', ...snooze.originalLabels];
-      const labelsToRemove = ['SNOOZED'];
+      const labelsToRemove = []; // No SNOOZED label to remove
 
       await this.gmailService.modifyEmail(
         tokens.accessToken,
@@ -140,6 +150,32 @@ export class SnoozeService {
       );
     }
     // For database emails, no label restoration needed
+
+    // Restore Kanban card for database emails
+    // For Gmail emails, they'll be synced back automatically when the board refreshes
+    if (isDbEmail) {
+      // Get the Inbox column for the user
+      const inboxColumn = await this.kanbanColumnRepository.findOne({
+        where: { userId, status: 'inbox' },
+      });
+
+      if (inboxColumn) {
+        // Create a new card in the Inbox column
+        const existingCard = await this.kanbanCardRepository.findOne({
+          where: { emailId: snooze.emailId, columnId: inboxColumn.id },
+        });
+
+        if (!existingCard) {
+          const newCard = this.kanbanCardRepository.create({
+            emailId: snooze.emailId,
+            columnId: inboxColumn.id,
+            order: 0,
+            notes: null,
+          });
+          await this.kanbanCardRepository.save(newCard);
+        }
+      }
+    }
 
     // Update snooze status
     snooze.status = SnoozeStatus.RESUMED;
@@ -169,14 +205,14 @@ export class SnoozeService {
       await this.snoozeRepository.save(nextSnooze);
       
       if (!isDbEmail) {
-        // For Gmail emails, move back to snoozed state for the next occurrence
+        // For Gmail emails, archive again for the next snooze occurrence
         const tokens = await this.authService.getGmailTokens(userId);
         await this.gmailService.modifyEmail(
           tokens.accessToken,
           tokens.refreshToken,
           snooze.gmailMessageId,
-          ['SNOOZED'],
-          ['INBOX', 'UNREAD', ...snooze.originalLabels],
+          [], // No labels to add
+          ['INBOX', 'UNREAD', ...snooze.originalLabels], // Remove all labels (archive)
         );
       }
     }
