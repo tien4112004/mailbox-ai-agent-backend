@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { KanbanColumn } from '../../database/entities/kanban-column.entity';
 import { KanbanCard } from '../../database/entities/kanban-card.entity';
 import { Email } from '../../database/entities/email.entity';
@@ -9,6 +9,8 @@ import { MoveCardDto } from './dto/move-card.dto';
 
 @Injectable()
 export class KanbanService {
+  private readonly logger = new Logger(KanbanService.name);
+
   constructor(
     @InjectRepository(KanbanColumn)
     private kanbanColumnRepository: Repository<KanbanColumn>,
@@ -51,9 +53,10 @@ export class KanbanService {
 
   /**
    * Get all Kanban columns for a user with their cards
+   * Auto-syncs emails from last 3 days to Inbox column on first load
    */
   async getKanbanBoard(userId: string) {
-    const columns = await this.kanbanColumnRepository.find({
+    let columns = await this.kanbanColumnRepository.find({
       where: { userId, isActive: true },
       order: { order: 'ASC' },
       relations: ['cards', 'cards.email'],
@@ -61,8 +64,24 @@ export class KanbanService {
 
     if (columns.length === 0) {
       // Initialize default board if none exists
-      return this.initializeKanbanBoard(userId);
+      columns = await this.initializeKanbanBoard(userId);
+      // Reload with relations
+      columns = await this.kanbanColumnRepository.find({
+        where: { userId, isActive: true },
+        order: { order: 'ASC' },
+        relations: ['cards', 'cards.email'],
+      });
     }
+
+    // Auto-sync emails from last 3 days to Inbox column
+    await this.autoSyncRecentEmails(userId, columns);
+
+    // Reload to get updated data
+    columns = await this.kanbanColumnRepository.find({
+      where: { userId, isActive: true },
+      order: { order: 'ASC' },
+      relations: ['cards', 'cards.email'],
+    });
 
     return columns.map((col) => ({
       id: col.id,
@@ -95,6 +114,98 @@ export class KanbanService {
           }))
         : [],
     }));
+  }
+
+  /**
+   * Auto-sync emails from last 3 days to Inbox column
+   * Only adds emails that don't already have cards
+   */
+  private async autoSyncRecentEmails(userId: string, columns: KanbanColumn[]): Promise<void> {
+    try {
+      // Find Inbox column
+      const inboxColumn = columns.find((col) => col.status === 'inbox');
+      if (!inboxColumn) {
+        this.logger.warn(`Inbox column not found for user ${userId}`);
+        return;
+      }
+
+      // Get emails from last 3 days
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+      const recentEmails = await this.emailRepository.find({
+        where: {
+          userId,
+          folder: 'INBOX',
+          createdAt: LessThan(new Date()), // Emails created before now
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      // Filter to only emails from last 3 days
+      const emailsFromLast3Days = recentEmails.filter(
+        (email) => new Date(email.createdAt) >= threeDaysAgo,
+      );
+
+      // Get existing card emails
+      const existingCards = await this.kanbanCardRepository.find({
+        where: { columnId: inboxColumn.id },
+      });
+      const existingEmailIds = new Set(existingCards.map((card) => card.emailId));
+
+      // Add new emails to Inbox column as cards
+      const newCards = emailsFromLast3Days
+        .filter((email) => !existingEmailIds.has(email.id))
+        .map((email, index) =>
+          this.kanbanCardRepository.create({
+            emailId: email.id,
+            columnId: inboxColumn.id,
+            order: index,
+            notes: null,
+          }),
+        );
+
+      if (newCards.length > 0) {
+        await this.kanbanCardRepository.save(newCards);
+        this.logger.log(
+          `Auto-synced ${newCards.length} recent emails to Inbox for user ${userId}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Error auto-syncing recent emails: ${error.message}`, error);
+      // Don't throw - let the board load even if sync fails
+    }
+  }
+
+  /**
+   * Remove cards for emails older than 3 days
+   * Should be called by cron job periodically
+   */
+  async cleanupOldCards(userId?: string): Promise<number> {
+    try {
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+      // Find cards with emails older than 3 days
+      const cardsToRemove = await this.kanbanCardRepository
+        .createQueryBuilder('card')
+        .leftJoinAndSelect('card.email', 'email')
+        .where('email.createdAt < :threeDaysAgo', { threeDaysAgo })
+        .andWhere(userId ? 'card.columnId IN (SELECT id FROM kanban_columns WHERE userId = :userId)' : '1=1', { userId })
+        .getMany();
+
+      if (cardsToRemove.length > 0) {
+        await this.kanbanCardRepository.remove(cardsToRemove);
+        this.logger.log(
+          `Cleaned up ${cardsToRemove.length} old cards${userId ? ` for user ${userId}` : ''}`,
+        );
+      }
+
+      return cardsToRemove.length;
+    } catch (error) {
+      this.logger.error(`Error cleaning up old cards: ${error.message}`, error);
+      throw error;
+    }
   }
 
   /**

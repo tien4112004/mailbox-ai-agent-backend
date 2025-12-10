@@ -8,6 +8,7 @@ import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { SnoozeSchedulerService } from './common/schedulers/snooze.scheduler';
+import { KanbanSchedulerService } from './common/schedulers/kanban.scheduler';
 
 // Config
 import appConfig from './config/app.config';
@@ -49,6 +50,7 @@ import { EmailsModule } from './modules/emails/emails.module';
       useClass: LoggingInterceptor,
     },
     SnoozeSchedulerService,
+    KanbanSchedulerService,
   ],
 })
 export class AppModule {}
