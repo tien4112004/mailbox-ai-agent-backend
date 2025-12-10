@@ -37,7 +37,6 @@ export class KanbanService {
       { name: 'To Do', order: 1, status: 'todo', color: '#F59E0B' },
       { name: 'In Progress', order: 2, status: 'in-progress', color: '#8B5CF6' },
       { name: 'Done', order: 3, status: 'done', color: '#10B981' },
-      { name: 'Snoozed', order: 4, status: 'snoozed', color: '#6B7280' },
     ];
 
     const columns = this.kanbanColumnRepository.create(
@@ -174,6 +173,81 @@ export class KanbanService {
     } catch (error) {
       this.logger.error(`Error auto-syncing recent emails: ${error.message}`, error);
       // Don't throw - let the board load even if sync fails
+    }
+  }
+
+  /**
+   * Sync emails from last 3 days to Kanban board Inbox column
+   * Called when user logs in via Gmail to populate the board with existing emails
+   */
+  async syncEmailsToBoard(userId: string): Promise<number> {
+    try {
+      // Get or initialize Kanban board
+      const columns = await this.kanbanColumnRepository.find({
+        where: { userId, isActive: true },
+      });
+
+      if (columns.length === 0) {
+        this.logger.warn(
+          `Kanban board not initialized for user ${userId}. Initialize board first.`,
+        );
+        return 0;
+      }
+
+      // Find Inbox column
+      const inboxColumn = columns.find((col) => col.status === 'inbox');
+      if (!inboxColumn) {
+        this.logger.warn(`Inbox column not found for user ${userId}`);
+        return 0;
+      }
+
+      // Get emails from last 3 days
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+      const recentEmails = await this.emailRepository.find({
+        where: {
+          userId,
+          folder: 'INBOX',
+          createdAt: LessThan(new Date()),
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      // Filter to only emails from last 3 days
+      const emailsFromLast3Days = recentEmails.filter(
+        (email) => new Date(email.createdAt) >= threeDaysAgo,
+      );
+
+      // Get existing card emails
+      const existingCards = await this.kanbanCardRepository.find({
+        where: { columnId: inboxColumn.id },
+      });
+      const existingEmailIds = new Set(existingCards.map((card) => card.emailId));
+
+      // Create cards for emails that don't already have cards
+      const newCards = emailsFromLast3Days
+        .filter((email) => !existingEmailIds.has(email.id))
+        .map((email, index) =>
+          this.kanbanCardRepository.create({
+            emailId: email.id,
+            columnId: inboxColumn.id,
+            order: index,
+            notes: null,
+          }),
+        );
+
+      if (newCards.length > 0) {
+        await this.kanbanCardRepository.save(newCards);
+        this.logger.log(
+          `Synced ${newCards.length} recent emails to Inbox board for user ${userId}`,
+        );
+      }
+
+      return newCards.length;
+    } catch (error) {
+      this.logger.error(`Error syncing emails to board: ${error.message}`, error);
+      throw error;
     }
   }
 
