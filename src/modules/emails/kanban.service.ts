@@ -110,7 +110,8 @@ export class KanbanService {
 
   /**
    * Auto-sync emails from last 3 days to Inbox column
-   * Only adds emails that don't already have cards
+   * Only adds emails that don't already have cards in ANY column
+   * Enforces single-column-per-email rule
    * Optimized: Database-level filtering instead of JavaScript
    */
   private async autoSyncRecentEmails(userId: string, columns: KanbanColumn[]): Promise<void> {
@@ -125,19 +126,18 @@ export class KanbanService {
       const threeDaysAgo = new Date();
       threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
-      // Get recent emails that don't have cards using a single optimized query
+      // Get recent emails that don't have cards in ANY column using a single optimized query
       const recentEmailsWithoutCards = await this.emailRepository
         .createQueryBuilder('email')
         .leftJoin(
           KanbanCard,
           'card',
-          'card.emailId = email.id AND card.columnId = :columnId',
-          { columnId: inboxColumn.id }
+          'card.emailId = email.id' // Check ANY column, not just inbox
         )
         .where('email.userId = :userId', { userId })
         .andWhere('email.folder = :folder', { folder: 'INBOX' })
         .andWhere('email.createdAt >= :threeDaysAgo', { threeDaysAgo })
-        .andWhere('card.id IS NULL') // Only emails without cards
+        .andWhere('card.id IS NULL') // Only emails without cards in any column
         .orderBy('email.createdAt', 'DESC')
         .select('email.id')
         .getMany();
@@ -336,6 +336,7 @@ export class KanbanService {
 
   /**
    * Move a card to a different column (Drag and Drop)
+   * Enforces single-column-per-email rule: removes email from other columns
    */
   async moveCard(userId: string, moveCardDto: MoveCardDto): Promise<KanbanCard> {
     const { emailId, fromColumnId, toColumnId, order } = moveCardDto;
@@ -361,25 +362,15 @@ export class KanbanService {
       throw new NotFoundException('Email not found');
     }
 
-    // Find existing card or create new one
-    let card = await this.kanbanCardRepository.findOne({
-      where: { emailId, columnId: fromColumnId },
-    });
+    // Delete all existing cards for this email (enforce single-column rule)
+    await this.kanbanCardRepository.delete({ emailId });
 
-    if (!card) {
-      // Create new card if it doesn't exist
-      card = this.kanbanCardRepository.create({
-        emailId,
-        columnId: toColumnId,
-        order: order || 0,
-      });
-    } else {
-      // Update existing card
-      card.columnId = toColumnId;
-      if (order !== undefined) {
-        card.order = order;
-      }
-    }
+    // Create new card in target column
+    const card = this.kanbanCardRepository.create({
+      emailId,
+      columnId: toColumnId,
+      order: order || 0,
+    });
 
     return this.kanbanCardRepository.save(card);
   }
