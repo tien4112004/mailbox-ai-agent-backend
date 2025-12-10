@@ -20,7 +20,6 @@ The Kanban Board API provides a visual workflow management system with customiza
 | To Do | todo | #F59E0B (Amber) | Emails that need attention |
 | In Progress | in-progress | #8B5CF6 (Purple) | Actively being worked on |
 | Done | done | #10B981 (Green) | Completed emails |
-| Snoozed | snoozed | #6B7280 (Gray) | Temporarily hidden emails |
 
 ## Base URL
 

@@ -1,8 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { GetEmailsDto } from './dto/get-emails.dto';
 import { SendEmailDto } from './dto/send-email.dto';
 import { ReplyEmailDto } from './dto/reply-email.dto';
 import { ModifyEmailDto } from './dto/modify-email.dto';
+import { Email } from '../../database/entities/email.entity';
 import { GmailService } from './gmail.service';
 import { AuthService } from '../auth/auth.service';
 
@@ -11,10 +14,102 @@ const pageTokenCache = new Map<string, Map<number, string>>();
 
 @Injectable()
 export class EmailsService {
+  private readonly logger = new Logger(EmailsService.name);
+
   constructor(
+    @InjectRepository(Email)
+    private emailRepository: Repository<Email>,
     private gmailService: GmailService,
     private authService: AuthService,
   ) {}
+
+  /**
+   * Sync initial emails from Gmail inbox to database (last 3 days)
+   */
+  async syncInitialEmails(userId: string): Promise<number> {
+    try {
+      const tokens = await this.authService.getGmailTokens(userId);
+      
+      // Fetch emails from Gmail inbox
+      const result = await this.gmailService.listEmails(
+        tokens.accessToken,
+        tokens.refreshToken,
+        'INBOX',
+        50, // Fetch up to 50 emails
+      );
+
+      if (!result.emails || result.emails.length === 0) {
+        this.logger.log(`No emails found for user ${userId}`);
+        return 0;
+      }
+
+      // Filter emails from last 3 days
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+      const recentEmails = result.emails.filter((email: any) => {
+        const emailDate = new Date(email.date);
+        return emailDate >= threeDaysAgo;
+      });
+
+      if (recentEmails.length === 0) {
+        this.logger.log(`No recent emails from last 3 days for user ${userId}`);
+        return 0;
+      }
+
+      // Convert Gmail emails to Email entity format
+      const emailsToSave = recentEmails.map((gmailEmail: any) => {
+        return this.emailRepository.create({
+          subject: gmailEmail.subject || '',
+          body: gmailEmail.body || '',
+          preview: gmailEmail.snippet || '',
+          fromName: gmailEmail.from?.name || '',
+          fromEmail: gmailEmail.from?.email || '',
+          toEmail: gmailEmail.to?.map((t: any) => t.email) || [],
+          read: !gmailEmail.labels?.includes('UNREAD'),
+          starred: gmailEmail.labels?.includes('STARRED') || false,
+          folder: 'INBOX',
+          attachments: gmailEmail.attachments || null,
+          userId,
+          createdAt: new Date(gmailEmail.date),
+        });
+      });
+
+      // Save emails, ignoring duplicates
+      const savedEmails = await Promise.all(
+        emailsToSave.map(async (email) => {
+          // Check if email already exists (by unique combination of userId, fromEmail, subject, and date)
+          const existing = await this.emailRepository.findOne({
+            where: {
+              userId,
+              fromEmail: email.fromEmail,
+              subject: email.subject,
+              createdAt: email.createdAt,
+            },
+          });
+
+          if (existing) {
+            return null; // Skip duplicate
+          }
+
+          return this.emailRepository.save(email);
+        }),
+      );
+
+      const savedCount = savedEmails.filter((e) => e !== null).length;
+      this.logger.log(
+        `Synced ${savedCount} recent emails to database for user ${userId}`,
+      );
+
+      return savedCount;
+    } catch (error) {
+      this.logger.error(
+        `Error syncing initial emails for user ${userId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
 
   async getMailboxes(userId: string) {
     const tokens = await this.authService.getGmailTokens(userId);
