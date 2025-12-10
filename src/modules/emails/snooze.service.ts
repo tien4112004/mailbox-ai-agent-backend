@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual } from 'typeorm';
-import { Snooze, SnoozeStatus } from '../database/entities/snooze.entity';
+import { Snooze, SnoozeStatus } from '../../database/entities/snooze.entity';
 import { SnoozeEmailDto } from './dto/snooze-email.dto';
 import { GmailService } from './gmail.service';
 import { AuthService } from '../auth/auth.service';

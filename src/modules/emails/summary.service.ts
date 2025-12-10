@@ -1,6 +1,7 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { SummarizeEmailDto } from './dto/summarize-email.dto';
-import { EmailContent, AIProvider } from './providers';
+import { EmailContent } from './providers';
+import { AIProvider } from './constants/summary.constants';
 import { AIProviderFactory } from './providers/ai-provider.factory';
 
 @Injectable()

@@ -1,18 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { AIProvider } from '../providers';
+import { AIProvider, SummaryLength, SummaryTone } from '../constants/summary.constants';
 
-export enum SummaryLength {
-  SHORT = 'short',
-  MEDIUM = 'medium',
-  LONG = 'long',
-}
-
-export enum SummaryTone {
-  FORMAL = 'formal',
-  CASUAL = 'casual',
-  TECHNICAL = 'technical',
-}
+export { SummaryLength, SummaryTone, AIProvider };
 
 export class SummarizeEmailDto {
   @ApiProperty({
