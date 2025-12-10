@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository, LessThan, In } from 'typeorm';
 import { KanbanColumn } from '../../database/entities/kanban-column.entity';
 import { KanbanCard } from '../../database/entities/kanban-card.entity';
 import { Email } from '../../database/entities/email.entity';
@@ -181,6 +181,7 @@ export class KanbanService {
   /**
    * Sync emails from last 3 days to Kanban board Inbox column
    * Called when user logs in via Gmail to populate the board with existing emails
+   * Enforces single-column-per-email rule: checks ALL columns, not just Inbox
    */
   async syncEmailsToBoard(userId: string): Promise<number> {
     try {
@@ -221,13 +222,13 @@ export class KanbanService {
         (email) => new Date(email.createdAt) >= threeDaysAgo,
       );
 
-      // Get existing card emails
+      // Get existing cards in ANY column (not just Inbox) to prevent duplicates
       const existingCards = await this.kanbanCardRepository.find({
-        where: { columnId: inboxColumn.id },
+        where: { emailId: In(emailsFromLast3Days.map((e) => e.id)) },
       });
       const existingEmailIds = new Set(existingCards.map((card) => card.emailId));
 
-      // Create cards for emails that don't already have cards
+      // Create cards for emails that don't already have cards in ANY column
       const newCards = emailsFromLast3Days
         .filter((email) => !existingEmailIds.has(email.id))
         .map((email, index) =>
