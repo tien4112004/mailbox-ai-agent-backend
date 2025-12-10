@@ -1,6 +1,7 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { IAISummaryProvider, AIProvider, AIProviderConfig } from './ai-summary.provider';
+import { IAISummaryProvider, AIProviderConfig } from './ai-summary.provider';
+import { AIProvider } from '../constants/summary.constants';
 import { OpenAIAdapter } from './openai.adapter';
 import { GeminiAdapter } from './gemini.adapter';
 

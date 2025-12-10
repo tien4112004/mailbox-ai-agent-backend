@@ -4,7 +4,9 @@ import {
     CreateDateColumn,
     UpdateDateColumn,
     Column,
+    OneToMany,
 } from 'typeorm';
+import { KanbanColumn } from './kanban-column.entity';
   
 @Entity('users')
 export class User {
@@ -43,5 +45,8 @@ createdAt: Date;
 
 @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
 updatedAt: Date;
+
+@OneToMany(() => KanbanColumn, (column) => column.user, { onDelete: 'CASCADE' })
+kanbanColumns: KanbanColumn[];
 }
   
