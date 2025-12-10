@@ -250,4 +250,43 @@ export class EmailsService {
     
     return this.modifyEmail(userId, emailId, { starred: !isStarred });
   }
+
+  async generateEmailSummary(
+    userId: string,
+    emailId: string,
+    dto,
+    summaryService,
+  ) {
+    // Fetch the email details
+    const email = await this.getEmailById(userId, emailId);
+
+    if (!email) {
+      throw new NotFoundException('Email not found');
+    }
+
+    // Prepare email content for summarization
+    const emailContent = {
+      subject: email.subject || '',
+      from: email.from?.email || email.from || '',
+      body: email.body || email.snippet || '',
+      date: email.date,
+    };
+
+    // Generate summary using the SummaryService with optional provider override
+    const summary = await summaryService.generateSummary(
+      emailContent,
+      dto,
+      dto.provider,
+    );
+
+    return {
+      id: emailId,
+      subject: email.subject,
+      from: email.from,
+      summary,
+      length: dto.length,
+      tone: dto.tone,
+      provider: dto.provider,
+    };
+  }
 }

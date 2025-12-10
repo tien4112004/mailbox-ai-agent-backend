@@ -50,6 +50,12 @@ export class Email {
   @Column({ name: 'user_id' })
   userId: string;
 
+  @Column('text', { nullable: true })
+  summary: string;
+
+  @Column('timestamp', { nullable: true, name: 'summary_generated_at' })
+  summaryGeneratedAt: Date;
+
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
   user: User;
