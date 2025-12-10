@@ -5,10 +5,13 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from './user.entity';
 
 @Entity('emails')
+@Index(['userId', 'folder', 'createdAt'])
+@Index(['userId', 'folder'])
 export class Email {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -7,10 +7,12 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { User } from './user.entity';
 
 @Entity('kanban_columns')
+@Index(['userId', 'isActive'])
 export class KanbanColumn {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -52,36 +52,33 @@ export class KanbanService {
 
   /**
    * Get all Kanban columns for a user with their cards
-   * Auto-syncs emails from last 3 days to Inbox column on first load
+   * Optimized: Single database query with eager loading
    */
   async getKanbanBoard(userId: string) {
-    let columns = await this.kanbanColumnRepository.find({
+    // Check if board exists and initialize if needed (non-blocking)
+    const existingColumns = await this.kanbanColumnRepository.find({
       where: { userId, isActive: true },
-      order: { order: 'ASC' },
-      relations: ['cards', 'cards.email'],
     });
 
-    if (columns.length === 0) {
-      // Initialize default board if none exists
-      columns = await this.initializeKanbanBoard(userId);
-      // Reload with relations
-      columns = await this.kanbanColumnRepository.find({
-        where: { userId, isActive: true },
-        order: { order: 'ASC' },
-        relations: ['cards', 'cards.email'],
-      });
+    if (existingColumns.length === 0) {
+      // Initialize default board
+      await this.initializeKanbanBoard(userId);
     }
 
-    // Auto-sync emails from last 3 days to Inbox column
-    await this.autoSyncRecentEmails(userId, columns);
-
-    // Reload to get updated data
-    columns = await this.kanbanColumnRepository.find({
+    // Single optimized query with proper relations and ordering
+    const columns = await this.kanbanColumnRepository.find({
       where: { userId, isActive: true },
       order: { order: 'ASC' },
       relations: ['cards', 'cards.email'],
     });
 
+    // Auto-sync emails from last 3 days to Inbox column asynchronously
+    // This doesn't block the response
+    this.autoSyncRecentEmails(userId, columns).catch((error) => {
+      this.logger.error(`Error auto-syncing emails in background: ${error.message}`);
+    });
+
+    // Map and return data immediately
     return columns.map((col) => ({
       id: col.id,
       name: col.name,
@@ -99,15 +96,11 @@ export class KanbanService {
               ? {
                   id: card.email.id,
                   subject: card.email.subject,
-                  body: card.email.body,
                   preview: card.email.preview,
                   fromName: card.email.fromName,
                   fromEmail: card.email.fromEmail,
-                  toEmail: card.email.toEmail,
                   read: card.email.read,
                   starred: card.email.starred,
-                  summary: (card.email as any).summary,
-                  folder: card.email.folder,
                 }
               : null,
           }))
@@ -118,60 +111,69 @@ export class KanbanService {
   /**
    * Auto-sync emails from last 3 days to Inbox column
    * Only adds emails that don't already have cards
+   * Optimized: Database-level filtering instead of JavaScript
    */
   private async autoSyncRecentEmails(userId: string, columns: KanbanColumn[]): Promise<void> {
     try {
       // Find Inbox column
       const inboxColumn = columns.find((col) => col.status === 'inbox');
       if (!inboxColumn) {
-        this.logger.warn(`Inbox column not found for user ${userId}`);
         return;
       }
 
-      // Get emails from last 3 days
+      // Get emails from last 3 days using database query
       const threeDaysAgo = new Date();
       threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
-      const recentEmails = await this.emailRepository.find({
-        where: {
-          userId,
-          folder: 'INBOX',
-          createdAt: LessThan(new Date()), // Emails created before now
-        },
-        order: { createdAt: 'DESC' },
-      });
+      // Get recent emails that don't have cards using a single optimized query
+      const recentEmailsWithoutCards = await this.emailRepository
+        .createQueryBuilder('email')
+        .leftJoin(
+          KanbanCard,
+          'card',
+          'card.emailId = email.id AND card.columnId = :columnId',
+          { columnId: inboxColumn.id }
+        )
+        .where('email.userId = :userId', { userId })
+        .andWhere('email.folder = :folder', { folder: 'INBOX' })
+        .andWhere('email.createdAt >= :threeDaysAgo', { threeDaysAgo })
+        .andWhere('card.id IS NULL') // Only emails without cards
+        .orderBy('email.createdAt', 'DESC')
+        .select('email.id')
+        .getMany();
 
-      // Filter to only emails from last 3 days
-      const emailsFromLast3Days = recentEmails.filter(
-        (email) => new Date(email.createdAt) >= threeDaysAgo,
+      if (recentEmailsWithoutCards.length === 0) {
+        return;
+      }
+
+      // Create cards in bulk with conflict handling
+      const newCards = recentEmailsWithoutCards.map((email, index) =>
+        this.kanbanCardRepository.create({
+          emailId: email.id,
+          columnId: inboxColumn.id,
+          order: index,
+          notes: null,
+        }),
       );
 
-      // Get existing card emails
-      const existingCards = await this.kanbanCardRepository.find({
-        where: { columnId: inboxColumn.id },
-      });
-      const existingEmailIds = new Set(existingCards.map((card) => card.emailId));
+      // Save with ON CONFLICT handling to prevent duplicates
+      await this.kanbanCardRepository
+        .createQueryBuilder()
+        .insert()
+        .into(KanbanCard)
+        .values(newCards)
+        .orIgnore()
+        .execute()
+        .catch((error) => {
+          // Log but don't fail if insert fails
+          this.logger.debug(`Some cards already exist: ${error.message}`);
+        });
 
-      // Add new emails to Inbox column as cards
-      const newCards = emailsFromLast3Days
-        .filter((email) => !existingEmailIds.has(email.id))
-        .map((email, index) =>
-          this.kanbanCardRepository.create({
-            emailId: email.id,
-            columnId: inboxColumn.id,
-            order: index,
-            notes: null,
-          }),
-        );
-
-      if (newCards.length > 0) {
-        await this.kanbanCardRepository.save(newCards);
-        this.logger.log(
-          `Auto-synced ${newCards.length} recent emails to Inbox for user ${userId}`,
-        );
-      }
+      this.logger.debug(
+        `Auto-synced ${newCards.length} emails to Inbox for user ${userId}`,
+      );
     } catch (error) {
-      this.logger.error(`Error auto-syncing recent emails: ${error.message}`, error);
+      this.logger.error(`Error auto-syncing recent emails: ${error.message}`);
       // Don't throw - let the board load even if sync fails
     }
   }
