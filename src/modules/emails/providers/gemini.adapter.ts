@@ -19,7 +19,7 @@ export class GeminiAdapter extends BaseAISummaryProvider {
   }
 
   getModel(): string {
-    return this.config.model || 'gemini-pro';
+    return this.config.model || 'gemini-2.5-flash-lite';
   }
 
   async generateSummary(
@@ -62,7 +62,19 @@ export class GeminiAdapter extends BaseAISummaryProvider {
           ],
           safetySettings: [
             {
-              category: 'HARM_CATEGORY_UNSPECIFIED',
+              category: 'HARM_CATEGORY_HATE_SPEECH',
+              threshold: 'BLOCK_NONE',
+            },
+            {
+              category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+              threshold: 'BLOCK_NONE',
+            },
+            {
+              category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+              threshold: 'BLOCK_NONE',
+            },
+            {
+              category: 'HARM_CATEGORY_HARASSMENT',
               threshold: 'BLOCK_NONE',
             },
           ],
