@@ -6,11 +6,13 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Email } from './email.entity';
 import { KanbanColumn } from './kanban-column.entity';
 
 @Entity('kanban_cards')
+@Index(['columnId', 'order'])
 export class KanbanCard {
   @PrimaryGeneratedColumn('uuid')
   id: string;
