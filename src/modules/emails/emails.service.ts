@@ -171,7 +171,80 @@ export class EmailsService {
     };
   }
 
+  /**
+   * Normalize email response format for consistent FE handling
+   * Converts both database and Gmail API formats to a unified structure
+   */
+  private normalizeEmailResponse(email: any, isFromDatabase: boolean = false) {
+    if (isFromDatabase) {
+      // Database format -> Unified format
+      return {
+        id: email.id,
+        threadId: null, // Database emails don't have thread IDs
+        subject: email.subject || '',
+        from: {
+          name: email.fromName || '',
+          email: email.fromEmail || '',
+        },
+        to: email.toEmail || [],
+        cc: [],
+        bcc: [],
+        date: email.createdAt,
+        snippet: email.preview || '',
+        body: email.body || '',
+        htmlBody: email.body || '',
+        textBody: email.body || '',
+        read: email.read || false,
+        starred: email.starred || false,
+        folder: email.folder || 'INBOX',
+        labelIds: [],
+        attachments: email.attachments || [],
+        summary: email.summary || null,
+      };
+    } else {
+      // Gmail API format -> Unified format
+      return {
+        id: email.id,
+        threadId: email.threadId || null,
+        subject: email.subject || '',
+        from: email.from || { name: '', email: '' },
+        to: email.to || [],
+        cc: email.cc || [],
+        bcc: email.bcc || [],
+        date: email.date,
+        snippet: email.snippet || '',
+        body: email.body || email.htmlBody || '',
+        htmlBody: email.htmlBody || '',
+        textBody: email.textBody || '',
+        read: email.read || false,
+        starred: email.starred || false,
+        folder: 'INBOX',
+        labelIds: email.labelIds || [],
+        attachments: email.attachments || [],
+        summary: null,
+      };
+    }
+  }
+
   async getEmailById(userId: string, emailId: string) {
+    // First, try to get email from database (UUID format)
+    // If it's a UUID, it's a database ID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    
+    if (uuidRegex.test(emailId)) {
+      // It's a database UUID - fetch from database
+      const email = await this.emailRepository.findOne({
+        where: { id: emailId, userId },
+      });
+
+      if (!email) {
+        throw new NotFoundException('Email not found');
+      }
+
+      return this.normalizeEmailResponse(email, true);
+    }
+
+    // Otherwise, treat it as a Gmail message ID and fetch from Gmail API
     const tokens = await this.authService.getGmailTokens(userId);
     
     const email = await this.gmailService.getEmailById(
@@ -184,11 +257,7 @@ export class EmailsService {
       throw new NotFoundException('Email not found');
     }
 
-    // Map 'to' field from Gmail API to 'toEmail' for database
-    return {
-      ...email,
-      toEmail: email.to,
-    };
+    return this.normalizeEmailResponse(email, false);
   }
 
   async sendEmail(userId: string, dto: SendEmailDto) {
@@ -352,7 +421,7 @@ export class EmailsService {
     dto,
     summaryService,
   ) {
-    // Fetch the email details
+    // Fetch the email details (normalized format)
     const email = await this.getEmailById(userId, emailId);
 
     if (!email) {
@@ -362,7 +431,7 @@ export class EmailsService {
     // Prepare email content for summarization
     const emailContent = {
       subject: email.subject || '',
-      from: email.from?.email || email.from || '',
+      from: email.from?.email || '',
       body: email.body || email.snippet || '',
       date: email.date,
     };
@@ -385,3 +454,4 @@ export class EmailsService {
     };
   }
 }
+
