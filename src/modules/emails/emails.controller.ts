@@ -18,6 +18,7 @@ import { Response } from 'express';
 import { EmailsService } from './emails.service';
 import { SnoozeService } from './snooze.service';
 import { SummaryService } from './summary.service';
+import { KanbanService } from './kanban.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetEmailsDto } from './dto/get-emails.dto';
 import { SendEmailDto } from './dto/send-email.dto';
@@ -26,6 +27,8 @@ import { ModifyEmailDto } from './dto/modify-email.dto';
 import { SnoozeEmailDto } from './dto/snooze-email.dto';
 import { GetSnoozesDto } from './dto/get-snoozes.dto';
 import { SummarizeEmailDto } from './dto/summarize-email.dto';
+import { CreateKanbanColumnDto } from './dto/create-kanban-column.dto';
+import { MoveCardDto } from './dto/move-card.dto';
 import { mockEmails } from './mock-data';
 
 @ApiTags('emails')
@@ -37,6 +40,7 @@ export class EmailsController {
     private readonly emailsService: EmailsService,
     private readonly snoozeService: SnoozeService,
     private readonly summaryService: SummaryService,
+    private readonly kanbanService: KanbanService,
   ) {}
 
   @Get('mailboxes')
@@ -412,5 +416,174 @@ export class EmailsController {
   })
   async cancelSnooze(@Request() req, @Param('snoozeId') snoozeId: string) {
     return this.snoozeService.cancelSnooze(req.user.id, snoozeId);
+  }
+
+  // ==================== KANBAN BOARD ENDPOINTS ====================
+
+  @Get('kanban/board')
+  @ApiOperation({ summary: 'Get Kanban board with all columns and cards' })
+  @ApiResponse({
+    status: 200,
+    description: 'Kanban board retrieved successfully',
+    schema: {
+      example: [
+        {
+          id: 'col-1',
+          name: 'Inbox',
+          order: 0,
+          status: 'inbox',
+          color: '#3B82F6',
+          cards: [
+            {
+              id: 'card-1',
+              emailId: 'email-1',
+              columnId: 'col-1',
+              order: 0,
+              notes: 'Follow up needed',
+              email: {
+                id: 'email-1',
+                subject: 'Meeting Tomorrow',
+                preview: 'Hi, let\'s meet tomorrow...',
+                fromName: 'John Doe',
+                fromEmail: 'john@example.com',
+              },
+            },
+          ],
+        },
+      ],
+    },
+  })
+  async getKanbanBoard(@Request() req) {
+    return this.kanbanService.getKanbanBoard(req.user.id);
+  }
+
+  @Post('kanban/columns')
+  @ApiOperation({ summary: 'Create a new Kanban column' })
+  @ApiResponse({
+    status: 201,
+    description: 'Column created successfully',
+  })
+  async createKanbanColumn(
+    @Request() req,
+    @Body() dto: CreateKanbanColumnDto,
+  ) {
+    return this.kanbanService.createColumn(req.user.id, dto);
+  }
+
+  @Put('kanban/columns/:columnId')
+  @ApiOperation({ summary: 'Update a Kanban column' })
+  @ApiResponse({
+    status: 200,
+    description: 'Column updated successfully',
+  })
+  async updateKanbanColumn(
+    @Request() req,
+    @Param('columnId') columnId: string,
+    @Body() dto: Partial<CreateKanbanColumnDto>,
+  ) {
+    return this.kanbanService.updateColumn(req.user.id, columnId, dto);
+  }
+
+  @Delete('kanban/columns/:columnId')
+  @ApiOperation({ summary: 'Delete a Kanban column' })
+  @ApiResponse({
+    status: 200,
+    description: 'Column deleted successfully',
+  })
+  async deleteKanbanColumn(
+    @Request() req,
+    @Param('columnId') columnId: string,
+  ) {
+    await this.kanbanService.deleteColumn(req.user.id, columnId);
+    return { success: true, message: 'Column deleted successfully' };
+  }
+
+  @Post('kanban/cards/move')
+  @ApiOperation({ summary: 'Move a card between columns (drag and drop)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Card moved successfully',
+    schema: {
+      example: {
+        id: 'card-1',
+        emailId: 'email-1',
+        columnId: 'col-2',
+        order: 0,
+      },
+    },
+  })
+  async moveCard(@Request() req, @Body() dto: MoveCardDto) {
+    return this.kanbanService.moveCard(req.user.id, dto);
+  }
+
+  @Post('kanban/cards/:emailId/add')
+  @ApiOperation({ summary: 'Add an email to a Kanban column' })
+  @ApiResponse({
+    status: 201,
+    description: 'Card added successfully',
+  })
+  async addCardToColumn(
+    @Request() req,
+    @Param('emailId') emailId: string,
+    @Body() body: { columnId: string; order?: number },
+  ) {
+    return this.kanbanService.addCardToColumn(
+      req.user.id,
+      emailId,
+      body.columnId,
+      body.order,
+    );
+  }
+
+  @Delete('kanban/cards/:cardId')
+  @ApiOperation({ summary: 'Remove a card from Kanban board' })
+  @ApiResponse({
+    status: 200,
+    description: 'Card removed successfully',
+  })
+  async removeCard(@Request() req, @Param('cardId') cardId: string) {
+    await this.kanbanService.removeCard(req.user.id, cardId);
+    return { success: true, message: 'Card removed successfully' };
+  }
+
+  @Put('kanban/cards/:cardId/notes')
+  @ApiOperation({ summary: 'Update Kanban card notes' })
+  @ApiResponse({
+    status: 200,
+    description: 'Card notes updated successfully',
+  })
+  async updateCardNotes(
+    @Request() req,
+    @Param('cardId') cardId: string,
+    @Body() body: { notes: string },
+  ) {
+    return this.kanbanService.updateCardNotes(req.user.id, cardId, body.notes);
+  }
+
+  @Get('kanban/columns/:columnId/cards')
+  @ApiOperation({ summary: 'Get all cards in a specific column' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cards retrieved successfully',
+  })
+  async getColumnCards(
+    @Request() req,
+    @Param('columnId') columnId: string,
+  ) {
+    return this.kanbanService.getColumnCards(req.user.id, columnId);
+  }
+
+  @Post('kanban/columns/:columnId/reorder')
+  @ApiOperation({ summary: 'Reorder cards within a column' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cards reordered successfully',
+  })
+  async reorderCards(
+    @Request() req,
+    @Param('columnId') columnId: string,
+    @Body() body: { cardIds: string[] },
+  ) {
+    return this.kanbanService.reorderCards(req.user.id, columnId, body.cardIds);
   }
 }
