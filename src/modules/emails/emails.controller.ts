@@ -17,6 +17,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiHeader } from '@n
 import { Response } from 'express';
 import { EmailsService } from './emails.service';
 import { SnoozeService } from './snooze.service';
+import { SummaryService } from './summary.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetEmailsDto } from './dto/get-emails.dto';
 import { SendEmailDto } from './dto/send-email.dto';
@@ -24,6 +25,7 @@ import { ReplyEmailDto } from './dto/reply-email.dto';
 import { ModifyEmailDto } from './dto/modify-email.dto';
 import { SnoozeEmailDto } from './dto/snooze-email.dto';
 import { GetSnoozesDto } from './dto/get-snoozes.dto';
+import { SummarizeEmailDto } from './dto/summarize-email.dto';
 import { mockEmails } from './mock-data';
 
 @ApiTags('emails')
@@ -34,6 +36,7 @@ export class EmailsController {
   constructor(
     private readonly emailsService: EmailsService,
     private readonly snoozeService: SnoozeService,
+    private readonly summaryService: SummaryService,
   ) {}
 
   @Get('mailboxes')
@@ -193,6 +196,38 @@ export class EmailsController {
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Length', buffer.length);
     res.status(HttpStatus.OK).send(buffer);
+  }
+
+  @Post(':id/summary')
+  @ApiOperation({ summary: 'Generate a summary for an email using AI' })
+  @ApiResponse({
+    status: 200,
+    description: 'Email summary generated successfully',
+    schema: {
+      example: {
+        id: '18f2a1b3c4d5e6f7',
+        subject: 'Meeting Tomorrow',
+        summary: 'John proposes a meeting tomorrow at 10 AM to discuss the project roadmap. He requests confirmation of attendance.',
+        length: 'medium',
+        tone: 'formal',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to generate summary (OpenAI API error)',
+  })
+  async generateEmailSummary(
+    @Request() req,
+    @Param('id') emailId: string,
+    @Body() dto: SummarizeEmailDto,
+  ) {
+    return this.emailsService.generateEmailSummary(
+      req.user.id,
+      emailId,
+      dto,
+      this.summaryService,
+    );
   }
 
   // Legacy endpoints for backward compatibility
