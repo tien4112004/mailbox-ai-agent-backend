@@ -29,6 +29,6 @@ import { Email } from '../../database/entities/email.entity';
     KanbanService,
     AIProviderFactory,
   ],
-  exports: [GmailService, SnoozeService, SummaryService, KanbanService, AIProviderFactory],
+  exports: [EmailsService, GmailService, SnoozeService, SummaryService, KanbanService, AIProviderFactory],
 })
 export class EmailsModule {}

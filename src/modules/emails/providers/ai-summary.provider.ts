@@ -60,6 +60,7 @@ export abstract class BaseAISummaryProvider implements IAISummaryProvider {
   ): string {
     const lengthInstructions = this.getLengthInstructions(options.length);
     const toneInstructions = this.getToneInstructions(options.tone);
+    const languageInstructions = this.getLanguageInstructions(emailContent);
     const customInstructions = options.customInstructions
       ? `\n\nAdditional instructions: ${options.customInstructions}`
       : '';
@@ -69,6 +70,7 @@ export abstract class BaseAISummaryProvider implements IAISummaryProvider {
 INSTRUCTIONS:
 ${lengthInstructions}
 ${toneInstructions}
+${languageInstructions}
 
 EMAIL DETAILS:
 From: ${emailContent.from}
@@ -113,6 +115,86 @@ Provide only the summary without any preamble or explanation. Start directly wit
       default:
         return 'TONE: Use professional, formal language. Maintain business-appropriate terminology.';
     }
+  }
+
+  protected getLanguageInstructions(emailContent: EmailContent): string {
+    const detectedLanguage = this.detectLanguage(emailContent);
+    return `LANGUAGE: Summarize in ${detectedLanguage}. Ensure the summary maintains the same language as the original email.`;
+  }
+
+  protected detectLanguage(emailContent: EmailContent): string {
+    // Combine subject and body for better detection
+    const text = `${emailContent.subject} ${emailContent.body}`.substring(0, 500);
+
+    // Simple language detection based on common patterns
+    // Vietnamese
+    if (/[\u0103\u0109\u0111\u0129\u0169\u01A1\u01B0]/.test(text)) {
+      return 'Vietnamese';
+    }
+
+    // Chinese (Simplified or Traditional)
+    if (/[\u4E00-\u9FFF]/.test(text)) {
+      return 'Chinese';
+    }
+
+    // Japanese
+    if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) {
+      return 'Japanese';
+    }
+
+    // Korean
+    if (/[\uAC00-\uD7AF]/.test(text)) {
+      return 'Korean';
+    }
+
+    // Russian
+    if (/[а-яёА-ЯЁ]/.test(text)) {
+      return 'Russian';
+    }
+
+    // Arabic
+    if (/[\u0600-\u06FF]/.test(text)) {
+      return 'Arabic';
+    }
+
+    // Thai
+    if (/[\u0E00-\u0E7F]/.test(text)) {
+      return 'Thai';
+    }
+
+    // German words
+    if (/\b(Der|Die|Das|Ein|Eine|Einen|Einem|Eines|ist|sind|werden|haben|hat)\b/i.test(text)) {
+      return 'German';
+    }
+
+    // Spanish/Portuguese words
+    if (/\b(el|la|de|que|es|en|una|un|por|para|con)\b/i.test(text)) {
+      // Check for more Spanish indicators
+      if (/\b(español|hola|buenos|dias|noche|adiós)\b/i.test(text)) {
+        return 'Spanish';
+      }
+      // Check for Portuguese indicators
+      if (/\b(português|olá|bom|dia|noite|adeus|você)\b/i.test(text)) {
+        return 'Portuguese';
+      }
+    }
+
+    // French words
+    if (/\b(le|la|de|que|est|en|un|une|par|pour|avec)\b/i.test(text)) {
+      if (/\b(français|bonjour|bonsoir|au|revoir|vous)\b/i.test(text)) {
+        return 'French';
+      }
+    }
+
+    // Italian
+    if (/\b(il|lo|la|gli|le|di|da|che|è|sono|per|con)\b/i.test(text)) {
+      if (/\b(italiano|ciao|buongiorno|buonasera|arrivederci)\b/i.test(text)) {
+        return 'Italian';
+      }
+    }
+
+    // Default to English
+    return 'English';
   }
 
   protected sanitizeEmailBody(body: string): string {

@@ -10,6 +10,8 @@ import {
   Query,
   Res,
   Headers,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -17,11 +19,19 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { GoogleAuthDto } from './dto/google-auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { EmailsService } from '../emails/emails.service';
+import { KanbanService } from '../emails/kanban.service';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    @Inject(forwardRef(() => EmailsService))
+    private emailsService: EmailsService,
+    @Inject(forwardRef(() => KanbanService))
+    private kanbanService: KanbanService,
+  ) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -118,6 +128,20 @@ export class AuthController {
   ) {
     try {
       const result = await this.authService.handleGmailCallback(code);
+      
+      // Sync initial emails and initialize Kanban board
+      try {
+        await Promise.all([
+          this.emailsService.syncInitialEmails(result.user.id),
+          this.kanbanService.initializeKanbanBoard(result.user.id),
+        ]);
+        
+        // Sync emails to Kanban board cards
+        await this.kanbanService.syncEmailsToBoard(result.user.id);
+      } catch (err) {
+        console.error('Error syncing initial emails or initializing Kanban board:', err);
+        // Don't fail login if sync fails
+      }
       
       // Decode frontend URL from state parameter
       let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';

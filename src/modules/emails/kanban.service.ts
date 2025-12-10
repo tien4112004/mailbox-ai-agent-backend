@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository, LessThan, In } from 'typeorm';
 import { KanbanColumn } from '../../database/entities/kanban-column.entity';
 import { KanbanCard } from '../../database/entities/kanban-card.entity';
 import { Email } from '../../database/entities/email.entity';
@@ -37,7 +37,6 @@ export class KanbanService {
       { name: 'To Do', order: 1, status: 'todo', color: '#F59E0B' },
       { name: 'In Progress', order: 2, status: 'in-progress', color: '#8B5CF6' },
       { name: 'Done', order: 3, status: 'done', color: '#10B981' },
-      { name: 'Snoozed', order: 4, status: 'snoozed', color: '#6B7280' },
     ];
 
     const columns = this.kanbanColumnRepository.create(
@@ -53,36 +52,33 @@ export class KanbanService {
 
   /**
    * Get all Kanban columns for a user with their cards
-   * Auto-syncs emails from last 3 days to Inbox column on first load
+   * Optimized: Single database query with eager loading
    */
   async getKanbanBoard(userId: string) {
-    let columns = await this.kanbanColumnRepository.find({
+    // Check if board exists and initialize if needed (non-blocking)
+    const existingColumns = await this.kanbanColumnRepository.find({
       where: { userId, isActive: true },
-      order: { order: 'ASC' },
-      relations: ['cards', 'cards.email'],
     });
 
-    if (columns.length === 0) {
-      // Initialize default board if none exists
-      columns = await this.initializeKanbanBoard(userId);
-      // Reload with relations
-      columns = await this.kanbanColumnRepository.find({
-        where: { userId, isActive: true },
-        order: { order: 'ASC' },
-        relations: ['cards', 'cards.email'],
-      });
+    if (existingColumns.length === 0) {
+      // Initialize default board
+      await this.initializeKanbanBoard(userId);
     }
 
-    // Auto-sync emails from last 3 days to Inbox column
-    await this.autoSyncRecentEmails(userId, columns);
-
-    // Reload to get updated data
-    columns = await this.kanbanColumnRepository.find({
+    // Single optimized query with proper relations and ordering
+    const columns = await this.kanbanColumnRepository.find({
       where: { userId, isActive: true },
       order: { order: 'ASC' },
       relations: ['cards', 'cards.email'],
     });
 
+    // Auto-sync emails from last 3 days to Inbox column asynchronously
+    // This doesn't block the response
+    this.autoSyncRecentEmails(userId, columns).catch((error) => {
+      this.logger.error(`Error auto-syncing emails in background: ${error.message}`);
+    });
+
+    // Map and return data immediately
     return columns.map((col) => ({
       id: col.id,
       name: col.name,
@@ -100,15 +96,11 @@ export class KanbanService {
               ? {
                   id: card.email.id,
                   subject: card.email.subject,
-                  body: card.email.body,
                   preview: card.email.preview,
                   fromName: card.email.fromName,
                   fromEmail: card.email.fromEmail,
-                  toEmail: card.email.toEmail,
                   read: card.email.read,
                   starred: card.email.starred,
-                  summary: (card.email as any).summary,
-                  folder: card.email.folder,
                 }
               : null,
           }))
@@ -118,15 +110,98 @@ export class KanbanService {
 
   /**
    * Auto-sync emails from last 3 days to Inbox column
-   * Only adds emails that don't already have cards
+   * Only adds emails that don't already have cards in ANY column
+   * Enforces single-column-per-email rule
+   * Optimized: Database-level filtering instead of JavaScript
    */
   private async autoSyncRecentEmails(userId: string, columns: KanbanColumn[]): Promise<void> {
     try {
       // Find Inbox column
       const inboxColumn = columns.find((col) => col.status === 'inbox');
       if (!inboxColumn) {
-        this.logger.warn(`Inbox column not found for user ${userId}`);
         return;
+      }
+
+      // Get emails from last 3 days using database query
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+      // Get recent emails that don't have cards in ANY column using a single optimized query
+      const recentEmailsWithoutCards = await this.emailRepository
+        .createQueryBuilder('email')
+        .leftJoin(
+          KanbanCard,
+          'card',
+          'card.emailId = email.id' // Check ANY column, not just inbox
+        )
+        .where('email.userId = :userId', { userId })
+        .andWhere('email.folder = :folder', { folder: 'INBOX' })
+        .andWhere('email.createdAt >= :threeDaysAgo', { threeDaysAgo })
+        .andWhere('card.id IS NULL') // Only emails without cards in any column
+        .orderBy('email.createdAt', 'DESC')
+        .select('email.id')
+        .getMany();
+
+      if (recentEmailsWithoutCards.length === 0) {
+        return;
+      }
+
+      // Create cards in bulk with conflict handling
+      const newCards = recentEmailsWithoutCards.map((email, index) =>
+        this.kanbanCardRepository.create({
+          emailId: email.id,
+          columnId: inboxColumn.id,
+          order: index,
+          notes: null,
+        }),
+      );
+
+      // Save with ON CONFLICT handling to prevent duplicates
+      await this.kanbanCardRepository
+        .createQueryBuilder()
+        .insert()
+        .into(KanbanCard)
+        .values(newCards)
+        .orIgnore()
+        .execute()
+        .catch((error) => {
+          // Log but don't fail if insert fails
+          this.logger.debug(`Some cards already exist: ${error.message}`);
+        });
+
+      this.logger.debug(
+        `Auto-synced ${newCards.length} emails to Inbox for user ${userId}`,
+      );
+    } catch (error) {
+      this.logger.error(`Error auto-syncing recent emails: ${error.message}`);
+      // Don't throw - let the board load even if sync fails
+    }
+  }
+
+  /**
+   * Sync emails from last 3 days to Kanban board Inbox column
+   * Called when user logs in via Gmail to populate the board with existing emails
+   * Enforces single-column-per-email rule: checks ALL columns, not just Inbox
+   */
+  async syncEmailsToBoard(userId: string): Promise<number> {
+    try {
+      // Get or initialize Kanban board
+      const columns = await this.kanbanColumnRepository.find({
+        where: { userId, isActive: true },
+      });
+
+      if (columns.length === 0) {
+        this.logger.warn(
+          `Kanban board not initialized for user ${userId}. Initialize board first.`,
+        );
+        return 0;
+      }
+
+      // Find Inbox column
+      const inboxColumn = columns.find((col) => col.status === 'inbox');
+      if (!inboxColumn) {
+        this.logger.warn(`Inbox column not found for user ${userId}`);
+        return 0;
       }
 
       // Get emails from last 3 days
@@ -137,7 +212,7 @@ export class KanbanService {
         where: {
           userId,
           folder: 'INBOX',
-          createdAt: LessThan(new Date()), // Emails created before now
+          createdAt: LessThan(new Date()),
         },
         order: { createdAt: 'DESC' },
       });
@@ -147,13 +222,13 @@ export class KanbanService {
         (email) => new Date(email.createdAt) >= threeDaysAgo,
       );
 
-      // Get existing card emails
+      // Get existing cards in ANY column (not just Inbox) to prevent duplicates
       const existingCards = await this.kanbanCardRepository.find({
-        where: { columnId: inboxColumn.id },
+        where: { emailId: In(emailsFromLast3Days.map((e) => e.id)) },
       });
       const existingEmailIds = new Set(existingCards.map((card) => card.emailId));
 
-      // Add new emails to Inbox column as cards
+      // Create cards for emails that don't already have cards in ANY column
       const newCards = emailsFromLast3Days
         .filter((email) => !existingEmailIds.has(email.id))
         .map((email, index) =>
@@ -168,12 +243,14 @@ export class KanbanService {
       if (newCards.length > 0) {
         await this.kanbanCardRepository.save(newCards);
         this.logger.log(
-          `Auto-synced ${newCards.length} recent emails to Inbox for user ${userId}`,
+          `Synced ${newCards.length} recent emails to Inbox board for user ${userId}`,
         );
       }
+
+      return newCards.length;
     } catch (error) {
-      this.logger.error(`Error auto-syncing recent emails: ${error.message}`, error);
-      // Don't throw - let the board load even if sync fails
+      this.logger.error(`Error syncing emails to board: ${error.message}`, error);
+      throw error;
     }
   }
 
@@ -260,6 +337,7 @@ export class KanbanService {
 
   /**
    * Move a card to a different column (Drag and Drop)
+   * Enforces single-column-per-email rule: removes email from other columns
    */
   async moveCard(userId: string, moveCardDto: MoveCardDto): Promise<KanbanCard> {
     const { emailId, fromColumnId, toColumnId, order } = moveCardDto;
@@ -285,25 +363,15 @@ export class KanbanService {
       throw new NotFoundException('Email not found');
     }
 
-    // Find existing card or create new one
-    let card = await this.kanbanCardRepository.findOne({
-      where: { emailId, columnId: fromColumnId },
-    });
+    // Delete all existing cards for this email (enforce single-column rule)
+    await this.kanbanCardRepository.delete({ emailId });
 
-    if (!card) {
-      // Create new card if it doesn't exist
-      card = this.kanbanCardRepository.create({
-        emailId,
-        columnId: toColumnId,
-        order: order || 0,
-      });
-    } else {
-      // Update existing card
-      card.columnId = toColumnId;
-      if (order !== undefined) {
-        card.order = order;
-      }
-    }
+    // Create new card in target column
+    const card = this.kanbanCardRepository.create({
+      emailId,
+      columnId: toColumnId,
+      order: order || 0,
+    });
 
     return this.kanbanCardRepository.save(card);
   }
