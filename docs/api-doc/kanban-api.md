@@ -4,11 +4,19 @@
 
 The Kanban Board API provides a visual workflow management system with customizable columns for organizing emails. It supports both the Kanban Interface Visualization and Workflow Management (Drag-and-Drop) features.
 
+### Key Features
+
+- **Auto-Sync Recent Emails**: Automatically syncs emails from the last 3 days to the Inbox column
+- **Automatic Cleanup**: Cron job runs every 3 days to remove cards for emails older than 3 days
+- **Smart Column Management**: Customize columns with colors and statuses
+- **Drag-and-Drop**: Move emails between columns with real-time updates
+- **Card Notes**: Add notes and metadata to email cards
+
 ### Default Columns
 
 | Column | Status | Color | Purpose |
 |--------|--------|-------|---------|
-| Inbox | inbox | #3B82F6 (Blue) | Primary entry point for new emails |
+| Inbox | inbox | #3B82F6 (Blue) | Auto-synced emails from last 3 days |
 | To Do | todo | #F59E0B (Amber) | Emails that need attention |
 | In Progress | in-progress | #8B5CF6 (Purple) | Actively being worked on |
 | Done | done | #10B981 (Green) | Completed emails |
@@ -43,6 +51,17 @@ The Kanban Interface provides a visual workflow management system with customiza
 ### 1. Get Kanban Board
 
 Retrieve the complete Kanban board with all columns and cards.
+
+**Auto-Sync Behavior:**
+- When fetching the board, the system automatically syncs emails from the **last 3 days** from your Gmail INBOX to the Kanban Inbox column
+- Only emails created within the last 3 days are displayed
+- Emails without existing cards are automatically added
+- Emails already with cards are not duplicated
+
+**Cleanup Behavior:**
+- A cron job runs **every 3 days at 2 AM** to remove cards for emails older than 3 days
+- This keeps your Kanban board focused on recent, actionable emails
+- You can manually delete cards at any time using the remove card endpoint
 
 **Endpoint:** `GET /kanban/board`
 
