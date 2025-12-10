@@ -1,4 +1,11 @@
-import { SummarizeEmailDto, SummaryLength, SummaryTone } from '../dto/summarize-email.dto';
+import { SummaryLength, SummaryTone, AIProvider } from '../constants/summary.constants';
+
+export interface SummarizeEmailDto {
+  length?: SummaryLength;
+  tone?: SummaryTone;
+  provider?: AIProvider;
+  customInstructions?: string;
+}
 
 export interface EmailContent {
   subject: string;
@@ -25,10 +32,7 @@ export interface IAISummaryProvider {
   getModel(): string;
 }
 
-export enum AIProvider {
-  OPENAI = 'openai',
-  GEMINI = 'gemini',
-}
+export { AIProvider };
 
 export abstract class BaseAISummaryProvider implements IAISummaryProvider {
   protected readonly logger: any; // Logger will be injected by NestJS
