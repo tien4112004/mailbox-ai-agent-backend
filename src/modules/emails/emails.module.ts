@@ -6,20 +6,29 @@ import { EmailsService } from './emails.service';
 import { SnoozeService } from './snooze.service';
 import { SummaryService } from './summary.service';
 import { GmailService } from './gmail.service';
+import { KanbanService } from './kanban.service';
 import { AIProviderFactory } from './providers/ai-provider.factory';
 import { AuthModule } from '../auth/auth.module';
 import { Snooze } from '../../database/entities/snooze.entity';
+import { KanbanColumn } from '../../database/entities/kanban-column.entity';
+import { KanbanCard } from '../../database/entities/kanban-card.entity';
+import { Email } from '../../database/entities/email.entity';
 
 @Module({
-  imports: [forwardRef(() => AuthModule), ConfigModule, TypeOrmModule.forFeature([Snooze])],
+  imports: [
+    forwardRef(() => AuthModule),
+    ConfigModule,
+    TypeOrmModule.forFeature([Snooze, KanbanColumn, KanbanCard, Email]),
+  ],
   controllers: [EmailsController],
   providers: [
     EmailsService,
     SnoozeService,
     GmailService,
     SummaryService,
+    KanbanService,
     AIProviderFactory,
   ],
-  exports: [GmailService, SnoozeService, SummaryService, AIProviderFactory],
+  exports: [GmailService, SnoozeService, SummaryService, KanbanService, AIProviderFactory],
 })
 export class EmailsModule {}
