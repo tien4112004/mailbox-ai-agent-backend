@@ -1,24 +1,50 @@
 # Gmail Email Client Backend
 
-A production-ready NestJS backend for a Gmail email client with full OAuth2 integration and Gmail API support.
+A production-ready NestJS backend for an email client with support for both Gmail API and SMTP/IMAP protocols.
 
 ## 🚀 Features
 
+- ✅ **Dual Email Provider Support**: Gmail API + SMTP/IMAP
 - ✅ **Gmail API Integration**: Full Gmail access via OAuth2
+- ✅ **SMTP/IMAP Support**: Connect to any email provider (Gmail, Outlook, Yahoo, custom servers)
 - ✅ **Secure Authentication**: JWT-based auth + Google OAuth2
 - ✅ **Complete Email Operations**: Read, send, reply, modify, delete
 - ✅ **Attachment Support**: Download and handle email attachments
 - ✅ **Automatic Token Refresh**: Server-side Gmail token management
+- ✅ **Multiple Accounts**: Configure multiple SMTP accounts per user
+- ✅ **Seamless Switching**: Switch between Gmail and SMTP providers
 - ✅ **RESTful API**: Clean, well-documented endpoints
 - ✅ **TypeScript**: Full type safety throughout
 - ✅ **Database**: PostgreSQL with TypeORM
-- ✅ **Swagger Documentation**: Interactive API docs at `/docs`
+- ✅ **Swagger Documentation**: Interactive API docs at `/api`
 
 ## 📚 Documentation
 
+### Core Documentation
 - **[Setup Guide](docs/setup-guide.md)** - Complete setup instructions, Google Cloud configuration, deployment
 - **[API Reference](docs/api-reference.md)** - Quick API endpoint reference and examples
 - **[Implementation Summary](docs/implementation-summary.md)** - Detailed implementation overview and architecture
+
+### SMTP/IMAP Documentation
+- **[SMTP/IMAP Integration Guide](docs/SMTP-IMAP-INTEGRATION.md)** - Complete guide to SMTP/IMAP functionality
+- **[Quick Start: SMTP Setup](docs/QUICK-START-SMTP.md)** - Fast setup guide for SMTP/IMAP
+- **[Provider Comparison](docs/PROVIDER-COMPARISON.md)** - Gmail API vs SMTP/IMAP comparison
+
+## Email Provider Support
+
+### Gmail API (OAuth2)
+- Secure OAuth2 authentication
+- Advanced search and filtering
+- Native Gmail features (labels, threads)
+- Push notifications support
+- Automatic token refresh
+
+### SMTP/IMAP (Universal)
+- Connect to any email provider
+- Standard username/password authentication
+- Support for corporate email servers
+- Works with Gmail, Outlook, Yahoo, custom servers
+- Multiple account management
 
 ## Technologies Used
 
@@ -26,6 +52,8 @@ A production-ready NestJS backend for a Gmail email client with full OAuth2 inte
 - [TypeORM](https://typeorm.io/) - TypeScript ORM
 - [PostgreSQL](https://www.postgresql.org/) - Database
 - [Google APIs](https://github.com/googleapis/google-api-nodejs-client) - Gmail API integration
+- [Nodemailer](https://nodemailer.com/) - SMTP client
+- [Node-IMAP](https://github.com/mscdex/node-imap) - IMAP client
 - [Passport.js](http://www.passportjs.org/) - Authentication
 - [Docker](https://www.docker.com/) - Containerization
 - [Swagger](https://swagger.io/) - API documentation
@@ -36,7 +64,8 @@ A production-ready NestJS backend for a Gmail email client with full OAuth2 inte
 
 - Node.js v18+
 - Docker & Docker Compose
-- Google Cloud account (for Gmail API credentials)
+- Google Cloud account (for Gmail API credentials, optional)
+- Email account credentials (for SMTP/IMAP)
 
 ### Quick Start
 
