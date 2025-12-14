@@ -37,6 +37,9 @@ gmailRefreshToken: string;
 @Column({ nullable: true, name: 'gmail_token_expiry', type: 'timestamptz' })
 gmailTokenExpiry: Date;
 
+@Column({ name: 'email_provider', default: 'gmail' })
+emailProvider: string; // 'gmail' or 'smtp'
+
 @Column({ default: 'user' })
 role: string;
 
