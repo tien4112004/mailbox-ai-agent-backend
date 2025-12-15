@@ -7,6 +7,7 @@ import { SnoozeService } from './snooze.service';
 import { SummaryService } from './summary.service';
 import { GmailService } from './gmail.service';
 import { KanbanService } from './kanban.service';
+import { EmailSearchService } from './search.service';
 import { AIProviderFactory } from './providers/ai-provider.factory';
 import { AuthModule } from '../auth/auth.module';
 import { Snooze } from '../../database/entities/snooze.entity';
@@ -27,8 +28,9 @@ import { Email } from '../../database/entities/email.entity';
     GmailService,
     SummaryService,
     KanbanService,
+    EmailSearchService,
     AIProviderFactory,
   ],
-  exports: [EmailsService, GmailService, SnoozeService, SummaryService, KanbanService, AIProviderFactory],
+  exports: [EmailsService, GmailService, SnoozeService, SummaryService, KanbanService, EmailSearchService, AIProviderFactory],
 })
 export class EmailsModule {}
