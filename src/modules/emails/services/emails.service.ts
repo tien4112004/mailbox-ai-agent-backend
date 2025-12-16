@@ -7,6 +7,7 @@ import { ReplyEmailDto } from '../dto/reply-email.dto';
 import { ModifyEmailDto } from '../dto/modify-email.dto';
 import { Email } from '../../../database/entities/email.entity';
 import { GmailService } from './gmail.service';
+import { EmailProviderFactory } from './providers/email-provider.factory';
 import { AuthService } from '../../auth/auth.service';
 
 // In-memory cache for page tokens (key: userId-folder-limit, value: page -> token map)
@@ -21,6 +22,7 @@ export class EmailsService {
     private emailRepository: Repository<Email>,
     private gmailService: GmailService,
     private authService: AuthService,
+    private emailProviderFactory: EmailProviderFactory,
   ) {}
 
   /**
@@ -139,18 +141,13 @@ export class EmailsService {
   }
 
   async getMailboxes(userId: string) {
-    const tokens = await this.authService.getGmailTokens(userId);
-    
-    const mailboxes = await this.gmailService.listMailboxes(
-      tokens.accessToken,
-      tokens.refreshToken,
-    );
-
+    const provider = await this.emailProviderFactory.createProvider(userId);
+    const mailboxes = await provider.listMailboxes();
     return mailboxes;
   }
 
   async getEmails(userId: string, dto: GetEmailsDto) {
-    const tokens = await this.authService.getGmailTokens(userId);
+    const provider = await this.emailProviderFactory.createProvider(userId);
     
     let { folder = 'INBOX', search, page = 1, limit = 20, pageToken } = dto;
     
@@ -168,9 +165,7 @@ export class EmailsService {
       }
     }
 
-    const result = await this.gmailService.listEmails(
-      tokens.accessToken,
-      tokens.refreshToken,
+    const result = await provider.listEmails(
       folder,
       limit,
       pageToken,
@@ -254,31 +249,9 @@ export class EmailsService {
   }
 
   async getEmailById(userId: string, emailId: string) {
-    // First, try to get email from database (UUID format)
-    // If it's a UUID, it's a database ID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const provider = await this.emailProviderFactory.createProvider(userId);
     
-    if (uuidRegex.test(emailId)) {
-      // It's a database UUID - fetch from database
-      const email = await this.emailRepository.findOne({
-        where: { id: emailId, userId },
-      });
-
-      if (!email) {
-        throw new NotFoundException('Email not found');
-      }
-
-      return this.normalizeEmailResponse(email, true);
-    }
-
-    // Otherwise, treat it as a Gmail message ID and fetch from Gmail API
-    const tokens = await this.authService.getGmailTokens(userId);
-    
-    const email = await this.gmailService.getEmailById(
-      tokens.accessToken,
-      tokens.refreshToken,
-      emailId,
-    );
+    const email = await provider.getEmailById(emailId);
 
     if (!email) {
       throw new NotFoundException('Email not found');
@@ -288,11 +261,9 @@ export class EmailsService {
   }
 
   async sendEmail(userId: string, dto: SendEmailDto) {
-    const tokens = await this.authService.getGmailTokens(userId);
+    const provider = await this.emailProviderFactory.createProvider(userId);
     
-    const result = await this.gmailService.sendEmail(
-      tokens.accessToken,
-      tokens.refreshToken,
+    const result = await provider.sendEmail(
       dto.to,
       dto.subject,
       dto.body,
@@ -308,14 +279,10 @@ export class EmailsService {
   }
 
   async replyToEmail(userId: string, emailId: string, dto: ReplyEmailDto) {
-    const tokens = await this.authService.getGmailTokens(userId);
+    const provider = await this.emailProviderFactory.createProvider(userId);
     
     // Get original email to extract metadata
-    const originalEmail = await this.gmailService.getEmailById(
-      tokens.accessToken,
-      tokens.refreshToken,
-      emailId,
-    );
+    const originalEmail = await provider.getEmailById(emailId);
 
     // Prepare reply
     const to = dto.replyAll 
@@ -327,9 +294,7 @@ export class EmailsService {
       ? originalEmail.subject 
       : `Re: ${originalEmail.subject}`;
 
-    const result = await this.gmailService.sendEmail(
-      tokens.accessToken,
-      tokens.refreshToken,
+    const result = await provider.sendEmail(
       to,
       subject,
       dto.body,
@@ -347,7 +312,7 @@ export class EmailsService {
   }
 
   async modifyEmail(userId: string, emailId: string, dto: ModifyEmailDto) {
-    const tokens = await this.authService.getGmailTokens(userId);
+    const provider = await this.emailProviderFactory.createProvider(userId);
     
     const addLabelIds: string[] = dto.addLabels || [];
     const removeLabelIds: string[] = dto.removeLabels || [];
@@ -372,19 +337,13 @@ export class EmailsService {
 
     // Handle trash
     if (dto.trash) {
-      await this.gmailService.trashEmail(
-        tokens.accessToken,
-        tokens.refreshToken,
-        emailId,
-      );
+      await provider.trashEmail(emailId);
       return { message: 'Email moved to trash' };
     }
 
     // Modify labels
     if (addLabelIds.length > 0 || removeLabelIds.length > 0) {
-      await this.gmailService.modifyEmail(
-        tokens.accessToken,
-        tokens.refreshToken,
+      await provider.modifyEmail(
         emailId,
         addLabelIds.length > 0 ? addLabelIds : undefined,
         removeLabelIds.length > 0 ? removeLabelIds : undefined,
@@ -395,13 +354,9 @@ export class EmailsService {
   }
 
   async deleteEmail(userId: string, emailId: string) {
-    const tokens = await this.authService.getGmailTokens(userId);
+    const provider = await this.emailProviderFactory.createProvider(userId);
     
-    await this.gmailService.deleteEmail(
-      tokens.accessToken,
-      tokens.refreshToken,
-      emailId,
-    );
+    await provider.deleteEmail(emailId);
 
     return { message: 'Email deleted permanently' };
   }
@@ -411,14 +366,9 @@ export class EmailsService {
     messageId: string,
     attachmentId: string,
   ) {
-    const tokens = await this.authService.getGmailTokens(userId);
+    const provider = await this.emailProviderFactory.createProvider(userId);
     
-    const attachment = await this.gmailService.getAttachment(
-      tokens.accessToken,
-      tokens.refreshToken,
-      messageId,
-      attachmentId,
-    );
+    const attachment = await provider.getAttachment(messageId, attachmentId);
 
     return attachment;
   }
@@ -428,16 +378,12 @@ export class EmailsService {
   }
 
   async toggleStar(userId: string, emailId: string) {
-    const tokens = await this.authService.getGmailTokens(userId);
+    const provider = await this.emailProviderFactory.createProvider(userId);
     
     // Get current email to check if starred
-    const email = await this.gmailService.getEmailById(
-      tokens.accessToken,
-      tokens.refreshToken,
-      emailId,
-    );
+    const email = await provider.getEmailById(emailId);
 
-    const isStarred = email.labelIds?.includes('STARRED') || false;
+    const isStarred = email.labelIds?.includes('STARRED') || email.isStarred || false;
     
     return this.modifyEmail(userId, emailId, { starred: !isStarred });
   }
