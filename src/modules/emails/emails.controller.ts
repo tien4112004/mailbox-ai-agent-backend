@@ -19,6 +19,7 @@ import { EmailsService } from './emails.service';
 import { SnoozeService } from './snooze.service';
 import { SummaryService } from './summary.service';
 import { KanbanService } from './kanban.service';
+import { SmtpConfigService } from './smtp-config.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetEmailsDto } from './dto/get-emails.dto';
 import { SendEmailDto } from './dto/send-email.dto';
@@ -29,6 +30,8 @@ import { GetSnoozesDto } from './dto/get-snoozes.dto';
 import { SummarizeEmailDto } from './dto/summarize-email.dto';
 import { CreateKanbanColumnDto } from './dto/create-kanban-column.dto';
 import { MoveCardDto } from './dto/move-card.dto';
+import { CreateSmtpConfigDto } from './dto/create-smtp-config.dto';
+import { UpdateSmtpConfigDto } from './dto/update-smtp-config.dto';
 import { mockEmails } from './mock-data';
 
 @ApiTags('emails')
@@ -41,6 +44,7 @@ export class EmailsController {
     private readonly snoozeService: SnoozeService,
     private readonly summaryService: SummaryService,
     private readonly kanbanService: KanbanService,
+    private readonly smtpConfigService: SmtpConfigService,
   ) {}
 
   @Get('mailboxes')
@@ -58,6 +62,95 @@ export class EmailsController {
   async getMailboxes(@Request() req) {
     return this.emailsService.getMailboxes(req.user.id);
   }
+
+  // ==================== SMTP CONFIGURATION ENDPOINTS ====================
+
+  @Post('smtp-config')
+  @ApiOperation({ summary: 'Create SMTP/IMAP configuration' })
+  @ApiResponse({
+    status: 201,
+    description: 'SMTP configuration created successfully',
+  })
+  async createSmtpConfig(@Request() req, @Body() dto: CreateSmtpConfigDto) {
+    return this.smtpConfigService.createConfig(req.user.id, dto);
+  }
+
+  @Get('smtp-config')
+  @ApiOperation({ summary: 'Get all SMTP configurations' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of SMTP configurations retrieved',
+  })
+  async getSmtpConfigs(@Request() req) {
+    return this.smtpConfigService.getConfigs(req.user.id);
+  }
+
+  @Get('smtp-config/:configId')
+  @ApiOperation({ summary: 'Get SMTP configuration by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'SMTP configuration retrieved',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Configuration not found',
+  })
+  async getSmtpConfig(@Request() req, @Param('configId') configId: string) {
+    return this.smtpConfigService.getConfigById(req.user.id, configId);
+  }
+
+  @Put('smtp-config/:configId')
+  @ApiOperation({ summary: 'Update SMTP configuration' })
+  @ApiResponse({
+    status: 200,
+    description: 'SMTP configuration updated successfully',
+  })
+  async updateSmtpConfig(
+    @Request() req,
+    @Param('configId') configId: string,
+    @Body() dto: UpdateSmtpConfigDto,
+  ) {
+    return this.smtpConfigService.updateConfig(req.user.id, configId, dto);
+  }
+
+  @Delete('smtp-config/:configId')
+  @ApiOperation({ summary: 'Delete SMTP configuration' })
+  @ApiResponse({
+    status: 200,
+    description: 'SMTP configuration deleted successfully',
+  })
+  async deleteSmtpConfig(@Request() req, @Param('configId') configId: string) {
+    return this.smtpConfigService.deleteConfig(req.user.id, configId);
+  }
+
+  @Post('smtp-config/:configId/test')
+  @ApiOperation({ summary: 'Test SMTP configuration connection' })
+  @ApiResponse({
+    status: 200,
+    description: 'Connection test successful',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Connection test failed',
+  })
+  async testSmtpConfig(@Request() req, @Param('configId') configId: string) {
+    return this.smtpConfigService.testConfig(req.user.id, configId);
+  }
+
+  @Post('smtp-config/:configId/set-default')
+  @ApiOperation({ summary: 'Set SMTP configuration as default' })
+  @ApiResponse({
+    status: 200,
+    description: 'Default configuration updated',
+  })
+  async setDefaultSmtpConfig(
+    @Request() req,
+    @Param('configId') configId: string,
+  ) {
+    return this.smtpConfigService.setDefault(req.user.id, configId);
+  }
+
+  // ==================== EMAIL ENDPOINTS ====================
 
   @Get('list')
   @ApiOperation({ summary: 'Get emails with filters and pagination' })
