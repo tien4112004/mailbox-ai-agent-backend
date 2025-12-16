@@ -1,13 +1,13 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { GetEmailsDto } from './dto/get-emails.dto';
-import { SendEmailDto } from './dto/send-email.dto';
-import { ReplyEmailDto } from './dto/reply-email.dto';
-import { ModifyEmailDto } from './dto/modify-email.dto';
-import { Email } from '../../database/entities/email.entity';
+import { GetEmailsDto } from '../dto/get-emails.dto';
+import { SendEmailDto } from '../dto/send-email.dto';
+import { ReplyEmailDto } from '../dto/reply-email.dto';
+import { ModifyEmailDto } from '../dto/modify-email.dto';
+import { Email } from '../../../database/entities/email.entity';
 import { GmailService } from './gmail.service';
-import { AuthService } from '../auth/auth.service';
+import { AuthService } from '../../auth/auth.service';
 
 // In-memory cache for page tokens (key: userId-folder-limit, value: page -> token map)
 const pageTokenCache = new Map<string, Map<number, string>>();
