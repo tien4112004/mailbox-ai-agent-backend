@@ -7,7 +7,7 @@ import { ReplyEmailDto } from '../dto/reply-email.dto';
 import { ModifyEmailDto } from '../dto/modify-email.dto';
 import { Email } from '../../../database/entities/email.entity';
 import { GmailService } from './gmail.service';
-import { EmailProviderFactory } from './providers/email-provider.factory';
+import { EmailProviderFactory } from '../providers/email-provider.factory';
 import { AuthService } from '../../auth/auth.service';
 
 // In-memory cache for page tokens (key: userId-folder-limit, value: page -> token map)

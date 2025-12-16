@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EmailProvider } from '../interfaces/email-provider.interface';
-import { GmailService } from '../gmail.service';
+import { GmailService } from '../services/gmail.service';
 
 @Injectable()
 export class GmailProviderAdapter implements EmailProvider {
