@@ -11,7 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { User } from '../../database/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { GmailService } from '../emails/gmail.service';
+import { GmailService } from '../emails/services/gmail.service';
 
 @Injectable()
 export class AuthService {

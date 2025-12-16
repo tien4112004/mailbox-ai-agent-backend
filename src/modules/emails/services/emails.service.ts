@@ -28,20 +28,44 @@ export class EmailsService {
    */
   async syncInitialEmails(userId: string): Promise<number> {
     try {
-      const tokens = await this.authService.getGmailTokens(userId);
+      this.logger.log(`Starting initial email sync for user ${userId}`);
+      
+      let tokens;
+      try {
+        tokens = await this.authService.getGmailTokens(userId);
+      } catch (error) {
+        this.logger.error(
+          `Failed to get Gmail tokens for user ${userId}. User may not have connected Gmail account.`,
+          error,
+        );
+        throw error;
+      }
+      
+      this.logger.debug(`Retrieved Gmail tokens for user ${userId}`);
       
       // Fetch emails from Gmail inbox
-      const result = await this.gmailService.listEmails(
-        tokens.accessToken,
-        tokens.refreshToken,
-        'INBOX',
-        50, // Fetch up to 50 emails
-      );
+      let result;
+      try {
+        result = await this.gmailService.listEmails(
+          tokens.accessToken,
+          tokens.refreshToken,
+          'INBOX',
+          100, // Fetch up to 100 emails
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to fetch emails from Gmail for user ${userId}`,
+          error,
+        );
+        throw error;
+      }
 
       if (!result.emails || result.emails.length === 0) {
-        this.logger.log(`No emails found for user ${userId}`);
+        this.logger.log(`No emails found in Gmail INBOX for user ${userId}`);
         return 0;
       }
+
+      this.logger.log(`Fetched ${result.emails.length} emails from Gmail INBOX for user ${userId}`);
 
       // Filter emails from last 3 days
       const threeDaysAgo = new Date();
@@ -56,6 +80,8 @@ export class EmailsService {
         this.logger.log(`No recent emails from last 3 days for user ${userId}`);
         return 0;
       }
+
+      this.logger.log(`Found ${recentEmails.length} recent emails from last 3 days for user ${userId}`);
 
       // Convert Gmail emails to Email entity format
       const emailsToSave = recentEmails.map((gmailEmail: any) => {
@@ -89,6 +115,7 @@ export class EmailsService {
           });
 
           if (existing) {
+            this.logger.debug(`Email already exists, skipping: ${email.subject} from ${email.fromEmail}`);
             return null; // Skip duplicate
           }
 
@@ -98,7 +125,7 @@ export class EmailsService {
 
       const savedCount = savedEmails.filter((e) => e !== null).length;
       this.logger.log(
-        `Synced ${savedCount} recent emails to database for user ${userId}`,
+        `Successfully synced ${savedCount} recent emails to database for user ${userId}`,
       );
 
       return savedCount;

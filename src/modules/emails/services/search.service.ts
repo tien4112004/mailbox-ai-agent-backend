@@ -24,14 +24,14 @@ export class EmailSearchService {
     const query = searchDto.query.trim();
     const limit = searchDto.limit || 20;
     const threshold = searchDto.threshold || 0.3;
-    const fields = (searchDto.fields || 'subject,from')
+    const fields = (searchDto.fields || 'subject,from_email')
       .split(',')
       .map((f) => f.trim())
-      .filter((f) => ['subject', 'from', 'body'].includes(f));
+      .filter((f) => ['subject', 'from_email', 'body'].includes(f));
 
     if (fields.length === 0) {
       throw new BadRequestException(
-        'Invalid fields. Must be one or more of: subject, from, body',
+        'Invalid fields. Must be one or more of: subject, from_email, body',
       );
     }
 
@@ -60,6 +60,8 @@ export class EmailSearchService {
         LIMIT $4
       `;
 
+      this.logger.debug(`Executing fuzzy search SQL for user ${userId} with query "${query}"`);
+
       const results = await this.dataSource.query(sql, [
         query,
         userId,
@@ -70,6 +72,12 @@ export class EmailSearchService {
       this.logger.debug(
         `Fuzzy search for user ${userId} with query "${query}" returned ${results.length} results`,
       );
+
+      if (results.length === 0) {
+        this.logger.warn(
+          `No emails found for user ${userId}. User may need to sync emails from Gmail first.`,
+        );
+      }
 
       return {
         query,
@@ -90,7 +98,7 @@ export class EmailSearchService {
 
   async fuzzySearchByField(
     userId: string,
-    field: 'subject' | 'from' | 'body',
+    field: 'subject' | 'from_email' | 'body',
     query: string,
     limit: number = 20,
     threshold: number = 0.3,
@@ -104,9 +112,9 @@ export class EmailSearchService {
       throw new BadRequestException('Search query cannot be empty');
     }
 
-    if (!['subject', 'from', 'body'].includes(field)) {
+    if (!['subject', 'from_email', 'body'].includes(field)) {
       throw new BadRequestException(
-        'Invalid field. Must be one of: subject, from, body',
+        'Invalid field. Must be one of: subject, from_email, body',
       );
     }
 
@@ -124,6 +132,8 @@ export class EmailSearchService {
         LIMIT $4
       `;
 
+      this.logger.debug(`Executing fuzzy search on field "${field}" for user ${userId} with query "${query}"`);
+
       const results = await this.dataSource.query(sql, [
         query,
         userId,
@@ -134,6 +144,12 @@ export class EmailSearchService {
       this.logger.debug(
         `Fuzzy search on ${field} for user ${userId} with query "${query}" returned ${results.length} results`,
       );
+
+      if (results.length === 0) {
+        this.logger.warn(
+          `No emails found in field "${field}" for user ${userId}. User may need to sync emails from Gmail first.`,
+        );
+      }
 
       return {
         field,

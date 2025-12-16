@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { SnoozeService } from '../../modules/emails/snooze.service';
+import { SnoozeService } from '../../modules/emails/services/snooze.service';
 
 @Injectable()
 export class SnoozeSchedulerService {
