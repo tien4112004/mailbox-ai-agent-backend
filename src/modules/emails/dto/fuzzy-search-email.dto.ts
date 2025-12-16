@@ -23,14 +23,14 @@ export class FuzzySearchEmailDto {
   limit?: number = 20;
 
   @ApiProperty({
-    description: 'Search fields (subject, from, body)',
-    example: 'subject,from',
-    default: 'subject,from',
+    description: 'Search fields (subject, from_email, body)',
+    example: 'subject,from_email',
+    default: 'subject,from_email',
     required: false,
   })
   @IsString()
   @IsOptional()
-  fields?: string = 'subject,from';
+  fields?: string = 'subject,from_email';
 
   @ApiProperty({
     description: 'Similarity threshold (0.0 to 1.0)',

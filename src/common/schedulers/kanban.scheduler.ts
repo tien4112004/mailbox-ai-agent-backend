@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { KanbanService } from '../../modules/emails/kanban.service';
+import { KanbanService } from '../../modules/emails/services/kanban.service';
 
 @Injectable()
 export class KanbanSchedulerService {

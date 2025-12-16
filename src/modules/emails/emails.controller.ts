@@ -647,7 +647,7 @@ export class EmailsController {
       throw new Error('Query parameter "q" is required');
     }
 
-    const validFields = ['subject', 'from', 'body'];
+    const validFields = ['subject', 'from_email', 'body'];
     if (!validFields.includes(field)) {
       throw new Error(`Invalid field "${field}". Allowed fields: ${validFields.join(', ')}`);
     }
@@ -657,7 +657,7 @@ export class EmailsController {
 
     return this.searchService.fuzzySearchByField(
       req.user.id,
-      field as 'subject' | 'from' | 'body',
+      field as 'subject' | 'from_email' | 'body',
       query,
       parsedLimit,
       parsedThreshold,
