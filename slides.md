@@ -2,6 +2,8 @@
 marp: true
 theme: default
 paginate: true
+header: Spec-kit
+footer: 22120134-22120368-22120370
 backgroundColor: #fff
 style: |
   section {
@@ -19,8 +21,12 @@ style: |
   }
 ---
 
-# Spec-kit Development
-## The Future of AI-Driven Engineering
+# Spec-kit
+## The Future of Spec-Driven Development
+### Team:
+- Hoàng Tiến Huy - 22120134
+- Phan Thanh Tiến - 22120368
+- Nguyễn Bùi Vương Tiễn - 22120370
 
 ---
 
@@ -28,12 +34,13 @@ style: |
 
 1. The Current State of AI Coding
 2. The Problems with Current Methods
-3. What is Spec-kit Development?
-4. Anatomy of a Spec-kit
-5. The Workflow
-6. Comparison with Other Methods
-7. Benefits & Challenges
-8. Future Outlook
+3. What is Spec-driven Development?
+4. What is Spec-kit
+5. Anatomy of a Spec-kit
+6. The Workflow
+7. Comparison with Other Methods
+8. Benefits & Challenges
+9. Future Outlook
 
 ---
 
@@ -45,7 +52,7 @@ style: |
 - **Autocomplete (Copilot, Codeium):**
   - "Ghost text" in your editor.
   - Fast, tactical, line-by-line assistance.
-- **Agentic (Devin, AutoGPT):** <!-- Change tool -->
+- **Agentic (Codex, Github Copilot, Claude Code, Gemini CLI):** <!-- Change tool -->
   - Autonomous, but often struggles with complex, unguided tasks.
 
 ---
@@ -72,26 +79,36 @@ style: |
 
 ---
 
-# Enter: Spec-kit Development
+# Enter: Spec-Driven Development
 
 **Definition:**
-A methodology where software is built by providing an AI model with a comprehensive, structured **"Specification Kit"** *before* code generation begins.
+A software approach where a clear **specification** is written first and serves as the **single source of truth**.
 
-> "Architecting the prompt, not just writing it."
+**Benefits:**
+- **Higher Quality:** Reduces ambiguity and catches errors early.
+- **Faster Scaling:** Enables parallel work and automated code generation.
 
----
-
-# Core Concept: The "Kit"
-
-The **Spec-kit** is a collection of files that serves as the **Single Source of Truth**.
-
-It is **NOT** just a text prompt.
-It **IS** a structured context package.
+**Challenges:**
+- **High Upfront Cost:** Requires discipline to write specs before coding.
+- **Maintenance Overhead:** The spec must always be kept in sync with the code.
 
 ---
 
-# Anatomy of a Spec-kit (1/4) "add example"
-## 📄 Functional Requirements
+# The Spec-kit: Spec-Driven Development in Practice
+
+The **Spec-kit** is the practical toolkit that makes Spec-Driven Development actionable. It's how you apply the theory.
+
+**How it connects:**
+- **The "Spec" is your input:** Your natural language prompt *is* the specification.
+- **The "Kit" is the process:** The `/speckit.*` commands provide a structured workflow.
+- **"Driven" is the AI's job:** The AI takes your spec and drives the implementation from it.
+
+This turns the abstract principles of SDD into a concrete, repeatable process.
+
+---
+
+# Anatomy of a Spec-kit (1/4)
+## Requirements
 
 - **User Stories:** "As a user, I want to..."
 - **Acceptance Criteria:** "Verify that..."
@@ -101,7 +118,7 @@ It **IS** a structured context package.
 ---
 
 # Anatomy of a Spec-kit (2/4)
-## 🔌 API doc & Schemas
+## API doc & Schemas
 
 - **Interfaces:** The "hard" constraints. "explain"
 - **OpenAPI / Swagger:** Defines endpoints, inputs, and outputs strictly.
@@ -111,7 +128,7 @@ It **IS** a structured context package.
 ---
 
 # Anatomy of a Spec-kit (3/4)
-## 🗄️ Data Models
+## Data Models
 
 - **ER Diagrams:** Visual or text-based (Mermaid.js/PlantUML/DBML).
 - **SQL Schemas:** `CREATE TABLE` statements.
@@ -121,7 +138,7 @@ It **IS** a structured context package.
 ---
 
 # Anatomy of a Spec-kit (4/4)
-## 🎨 Design & Constraints
+## Design & Constraints
 
 - **Style:** Colors, spacing, typography (JSON/CSS variables).
 - **Component Library:** List of available UI components (don't reinvent the button).
@@ -169,16 +186,90 @@ It **IS** a structured context package.
 - Run tests (which the AI also wrote based on the specs).
 - **Refinement:** If code is wrong, *update the Spec-kit*, not just the code.
 
+- **Refinement:** If code is wrong, *update the Spec-kit*, not just the code.
+
+---
+
+# From Theory to Practice: The Commands
+
+Now, let's see how this workflow translates into concrete commands you can use in your AI assistant.
+
+---
+
+# Command: `/speckit.constitution`
+
+- **Purpose:** To establish the project's foundational rules and guidelines. This is the "law" the AI must follow.
+- **Input:** A natural language prompt describing your desired standards (e.g., code quality, testing, UX consistency).
+- **Output:** A `constitution.md` file in the `.specify/memory/` directory.
+- **Where:** Use this once at the very beginning of your project, right after `specify init`.
+
+---
+
+# Command: `/speckit.specify`
+
+- **Purpose:** To define the functional requirements of what you want to build.
+- **Input:** A detailed, high-level description of the feature or app. Focus on the **WHAT** and **WHY**, not the technology.
+- **Output:** A new `spec.md` file inside a feature-specific folder (e.g., `specs/001-photo-album/`), containing user stories and requirements.
+- **Where:** Use this in your AI chat after the constitution is set.
+
+---
+
+# Command: `/speckit.clarify`
+
+- **Purpose:** To let the AI ask questions and fill in gaps in the specification *before* planning.
+- **Input:** Just the command. The AI will then prompt you with questions.
+- **Output:** An updated `spec.md` with a new "Clarifications" section containing your answers.
+- **Where:** Use this immediately after `/speckit.specify` to ensure the requirements are solid.
+
+---
+
+# Command: `/speckit.plan`
+
+- **Purpose:** To create a detailed technical implementation plan.
+- **Input:** A prompt specifying your desired tech stack, architecture, and libraries (e.g., "Use Vite, vanilla JS, and a local SQLite database").
+- **Output:** Technical documents like `plan.md`, `data-model.md`, and API contracts within your feature's spec folder.
+- **Where:** Use this after the specification has been created and clarified.
+
+---
+
+# Command: `/speckit.tasks`
+
+- **Purpose:** To automatically break down the technical plan into a detailed, actionable checklist.
+- **Input:** Just the command. It reads the `plan.md` that already exists.
+- **Output:** A `tasks.md` file in your feature's spec folder, with an ordered list of implementation steps.
+- **Where:** Use this after the technical plan is finalized.
+
+---
+
+# Command: `/speckit.implement`
+
+- **Purpose:** To execute the generated task list and build the application.
+- **Input:** Just the command. The AI will read `tasks.md` and start building.
+- **Output:** The final source code for your application. The AI will run local commands (`npm`, `dotnet`, etc.) as needed.
+- **Where:** This is the final step. Use it when your plan and tasks are ready for execution.
+
+---
+
+# Optional Commands
+
+- **/speckit.analyze:**
+  - **Purpose:** Checks for consistency across all your spec files.
+  - **When:** Run after `/speckit.tasks` to catch errors before implementation.
+
+- **/speckit.checklist:**
+  - **Purpose:** Generates a quality checklist to validate that the spec is clear and complete.
+  - **When:** Run after `/speckit.specify` to act like "unit tests for your English."
+
 ---
 
 # Comparison: Spec-kit vs. Others
 
-| Feature | 💬 Chat-driven | ⚡ Autocomplete | 📦 **Spec-kit** |
-| :--- | :--- | :--- | :--- |
-| **Input** | Natural Language | Code Context | Structured Specs |
-| **Scope** | Snippets | Lines / Blocks | Modules / Features |
-| **Context** | Ephemeral | Local (File) | **Persistent (Kit)** |
-| **Consistency** | Low | Medium | **High** |
+| Feature | Chat-driven | Autocomplete | Agentic (no kit) | **Spec-kit** |
+| :--- | :--- | :--- | :--- | :--- |
+| **Input** | Natural Language | Code Context | Natural Language | **Structured Specs** |
+| **Scope** | Snippets | Lines / Blocks | Modules / Apps | **Modules / Features** |
+| **Context** | Ephemeral | Local (File) | Inferred | **Persistent (Kit)** |
+| **Consistency** | Low | Medium | Medium | **High** |
 
 ---
 
@@ -205,28 +296,19 @@ It **IS** a structured context package.
 # Challenges & Limitations
 
 - **Upfront Investment:**
-  - Requires writing specs *before* coding. (The "Lazy Developer" problem).
-- **Maintenance:**
-  - The Spec-kit must be kept in sync with the code.
-- **Complexity:**
-  - Over-engineering the kit can lead to diminishing returns.
-
----
-
-# Future Outlook
-
-- **Auto-generated Kits:**
-  - AI analyzing existing code to *create* the Spec-kit for you.
-- **IDE Integration:**
-  - "Spec-driven" IDEs where the spec is a first-class citizen.
-- **Continuous Validation:**
-  - CI/CD pipelines that check if code matches the Spec-kit.
+  - Requires discipline to write detailed specs *before* coding, which can feel slower initially.
+- **Maintenance Overhead:**
+  - The Spec-kit must be kept in sync with the code, creating a "dual maintenance" problem.
+- **Skill Curve:**
+  - Writing effective, machine-readable specs is a distinct skill that needs to be learned.
+- **Potential for Rigidity:**
+  - Can be less suitable for highly exploratory or rapidly-changing prototypes where requirements are unclear.
 
 ---
 
 # Conclusion
 
-**Spec-kit Development** moves us from "Coding with AI" to **"Architecting for AI"**.
+**Spec-kit** moves us from "Coding with AI" to **"Architecting for AI"**.
 
 It empowers developers to focus on the **WHAT** (The Specification) and lets the AI handle the **HOW** (The Implementation).
 
