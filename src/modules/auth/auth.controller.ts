@@ -19,8 +19,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { GoogleAuthDto } from './dto/google-auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { EmailsService } from '../emails/emails.service';
-import { KanbanService } from '../emails/kanban.service';
+import { EmailsService } from '../emails/services/emails.service';
+import { KanbanService } from '../emails/services/kanban.service';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -129,7 +129,7 @@ export class AuthController {
     try {
       const result = await this.authService.handleGmailCallback(code);
       
-      // Sync initial emails and initialize Kanban board
+      // Sync emails (always, to get new emails on each login) and initialize Kanban board
       try {
         await Promise.all([
           this.emailsService.syncInitialEmails(result.user.id),
@@ -139,7 +139,7 @@ export class AuthController {
         // Sync emails to Kanban board cards
         await this.kanbanService.syncEmailsToBoard(result.user.id);
       } catch (err) {
-        console.error('Error syncing initial emails or initializing Kanban board:', err);
+        console.error('Error syncing emails or initializing Kanban board:', err);
         // Don't fail login if sync fails
       }
       

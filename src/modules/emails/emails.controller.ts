@@ -15,10 +15,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { Response } from 'express';
-import { EmailsService } from './emails.service';
-import { SnoozeService } from './snooze.service';
-import { SummaryService } from './summary.service';
-import { KanbanService } from './kanban.service';
+import { EmailsService, SnoozeService, SummaryService, KanbanService, KanbanFilterSortService } from './services';
+import { EmailSearchService } from './services/search.service';
 import { SmtpConfigService } from './smtp-config.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetEmailsDto } from './dto/get-emails.dto';
@@ -26,13 +24,14 @@ import { SendEmailDto } from './dto/send-email.dto';
 import { ReplyEmailDto } from './dto/reply-email.dto';
 import { ModifyEmailDto } from './dto/modify-email.dto';
 import { SnoozeEmailDto } from './dto/snooze-email.dto';
-import { GetSnoozesDto } from './dto/get-snoozes.dto';
 import { SummarizeEmailDto } from './dto/summarize-email.dto';
 import { CreateKanbanColumnDto } from './dto/create-kanban-column.dto';
 import { MoveCardDto } from './dto/move-card.dto';
+import { FuzzySearchEmailDto } from './dto/fuzzy-search-email.dto';
+import { KanbanFilterSortDto } from './dto/kanban-filter-sort.dto';
 import { CreateSmtpConfigDto } from './dto/create-smtp-config.dto';
 import { UpdateSmtpConfigDto } from './dto/update-smtp-config.dto';
-import { mockEmails } from './mock-data';
+import { mockEmails } from './mock';
 
 @ApiTags('emails')
 @Controller('emails')
@@ -44,6 +43,8 @@ export class EmailsController {
     private readonly snoozeService: SnoozeService,
     private readonly summaryService: SummaryService,
     private readonly kanbanService: KanbanService,
+    private readonly kanbanFilterSortService: KanbanFilterSortService,
+    private readonly searchService: EmailSearchService,
     private readonly smtpConfigService: SmtpConfigService,
   ) {}
 
@@ -678,5 +679,146 @@ export class EmailsController {
     @Body() body: { cardIds: string[] },
   ) {
     return this.kanbanService.reorderCards(req.user.id, columnId, body.cardIds);
+  }
+
+  @Post('search/fuzzy')
+  @ApiOperation({ 
+    summary: 'Fuzzy search emails by subject and sender with typo tolerance',
+    description: 'Search emails using fuzzy matching with configurable similarity threshold and result limits. Supports searching across subject, sender, and body fields with automatic ranking by relevance.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Search results retrieved successfully',
+    schema: {
+      example: [
+        {
+          id: 'email-uuid-1',
+          gmailMessageId: 'msg-123',
+          subject: 'Meeting Tomorrow',
+          from: 'john@example.com',
+          to: 'user@example.com',
+          body: 'Let me know if you are free...',
+          similarity: 0.95,
+          matchedField: 'subject'
+        }
+      ]
+    }
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid search parameters',
+  })
+  async fuzzySearchEmails(
+    @Request() req,
+    @Body() searchDto: FuzzySearchEmailDto,
+  ) {
+    return this.searchService.fuzzySearchEmails(req.user.id, searchDto);
+  }
+
+  @Post('search/fuzzy/:field')
+  @ApiOperation({ 
+    summary: 'Fuzzy search emails by a specific field',
+    description: 'Search emails in a specific field (subject, from, or body) with configurable similarity threshold and result limits.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Search results for the specific field',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid field or search parameters',
+  })
+  async fuzzySearchByField(
+    @Request() req,
+    @Param('field') field: string,
+    @Query('q') query: string,
+    @Query('limit') limit?: string,
+    @Query('threshold') threshold?: string,
+  ) {
+    if (!query) {
+      throw new Error('Query parameter "q" is required');
+    }
+
+    const validFields = ['subject', 'from_email', 'body'];
+    if (!validFields.includes(field)) {
+      throw new Error(`Invalid field "${field}". Allowed fields: ${validFields.join(', ')}`);
+    }
+
+    const parsedLimit = limit ? Math.min(parseInt(limit, 10), 100) : 20;
+    const parsedThreshold = threshold ? parseFloat(threshold) : 0.3;
+
+    return this.searchService.fuzzySearchByField(
+      req.user.id,
+      field as 'subject' | 'from_email' | 'body',
+      query,
+      parsedLimit,
+      parsedThreshold,
+    );
+  }
+
+  @Get('kanban/columns/:columnId/cards/filtered')
+  @ApiOperation({
+    summary: 'Get cards in a column with filtering and sorting',
+    description: 'Retrieve cards from a specific Kanban column with applied filters and sorting',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Filtered and sorted cards retrieved successfully',
+  })
+  async getFilteredColumnCards(
+    @Request() req,
+    @Param('columnId') columnId: string,
+    @Query() filterSortDto: KanbanFilterSortDto,
+  ) {
+    // Get cards for the column
+    const cards = await this.kanbanService.getColumnCards(req.user.id, columnId);
+
+    // Apply filtering and sorting
+    const processedCards = this.kanbanFilterSortService.applyFilterAndSort(
+      cards as any[],
+      filterSortDto.sortBy,
+      filterSortDto.filters,
+    );
+
+    return {
+      columnId,
+      sortBy: filterSortDto.sortBy,
+      filters: filterSortDto.filters || [],
+      count: processedCards.length,
+      cards: processedCards,
+    };
+  }
+
+  @Post('kanban/board/filtered')
+  @ApiOperation({
+    summary: 'Get entire Kanban board with filtering and sorting',
+    description: 'Retrieve the entire Kanban board with filters and sorting applied to all columns',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Filtered and sorted Kanban board retrieved successfully',
+  })
+  async getFilteredKanbanBoard(
+    @Request() req,
+    @Body() filterSortDto: KanbanFilterSortDto,
+  ) {
+    // Get full Kanban board
+    const board = await this.kanbanService.getKanbanBoard(req.user.id);
+
+    // Apply filtering and sorting to each column
+    const processedBoard = board.map((column) => ({
+      ...column,
+      cards: this.kanbanFilterSortService.applyFilterAndSort(
+        column.cards as any[],
+        filterSortDto.sortBy,
+        filterSortDto.filters,
+      ),
+    }));
+
+    return {
+      sortBy: filterSortDto.sortBy,
+      filters: filterSortDto.filters || [],
+      columns: processedBoard,
+    };
   }
 }
