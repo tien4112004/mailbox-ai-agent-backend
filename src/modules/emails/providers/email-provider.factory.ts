@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { EmailProvider } from '../interfaces/email-provider.interface';
 import { GmailProviderAdapter } from './gmail-provider.adapter';
 import { SmtpProviderAdapter } from './smtp-provider.adapter';
-import { GmailService } from '../gmail.service';
+import { GmailService } from '../services/gmail.service';
 import { ImapService } from '../imap.service';
 import { SmtpService } from '../smtp.service';
 import { SmtpConfig } from '../../../database/entities/smtp-config.entity';
