@@ -1,11 +1,11 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, In } from 'typeorm';
-import { KanbanColumn } from '../../database/entities/kanban-column.entity';
-import { KanbanCard } from '../../database/entities/kanban-card.entity';
-import { Email } from '../../database/entities/email.entity';
-import { CreateKanbanColumnDto } from './dto/create-kanban-column.dto';
-import { MoveCardDto } from './dto/move-card.dto';
+import { KanbanColumn } from '../../../database/entities/kanban-column.entity';
+import { KanbanCard } from '../../../database/entities/kanban-card.entity';
+import { Email } from '../../../database/entities/email.entity';
+import { CreateKanbanColumnDto } from '../dto/create-kanban-column.dto';
+import { MoveCardDto } from '../dto/move-card.dto';
 
 @Injectable()
 export class KanbanService {

@@ -1,13 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual } from 'typeorm';
-import { Snooze, SnoozeStatus } from '../../database/entities/snooze.entity';
-import { Email } from '../../database/entities/email.entity';
-import { KanbanCard } from '../../database/entities/kanban-card.entity';
-import { KanbanColumn } from '../../database/entities/kanban-column.entity';
-import { SnoozeEmailDto } from './dto/snooze-email.dto';
+import { Snooze, SnoozeStatus } from '../../../database/entities/snooze.entity';
+import { Email } from '../../../database/entities/email.entity';
+import { KanbanCard } from '../../../database/entities/kanban-card.entity';
+import { KanbanColumn } from '../../../database/entities/kanban-column.entity';
+import { SnoozeEmailDto } from '../dto/snooze-email.dto';
 import { GmailService } from './gmail.service';
-import { AuthService } from '../auth/auth.service';
+import { AuthService } from '../../auth/auth.service';
 import { addDays, addWeeks, addMonths, isPast } from 'date-fns';
 
 @Injectable()

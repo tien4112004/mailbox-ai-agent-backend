@@ -15,11 +15,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { Response } from 'express';
-import { EmailsService } from './emails.service';
-import { SnoozeService } from './snooze.service';
-import { SummaryService } from './summary.service';
-import { KanbanService } from './kanban.service';
-import { EmailSearchService } from './search.service';
+import { EmailsService, SnoozeService, SummaryService, KanbanService, KanbanFilterSortService } from './services';
+import { EmailSearchService } from './services/search.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetEmailsDto } from './dto/get-emails.dto';
 import { SendEmailDto } from './dto/send-email.dto';
@@ -31,7 +28,8 @@ import { SummarizeEmailDto } from './dto/summarize-email.dto';
 import { CreateKanbanColumnDto } from './dto/create-kanban-column.dto';
 import { MoveCardDto } from './dto/move-card.dto';
 import { FuzzySearchEmailDto } from './dto/fuzzy-search-email.dto';
-import { mockEmails } from './mock-data';
+import { KanbanFilterSortDto } from './dto/kanban-filter-sort.dto';
+import { mockEmails } from './mock';
 
 @ApiTags('emails')
 @Controller('emails')
@@ -43,6 +41,7 @@ export class EmailsController {
     private readonly snoozeService: SnoozeService,
     private readonly summaryService: SummaryService,
     private readonly kanbanService: KanbanService,
+    private readonly kanbanFilterSortService: KanbanFilterSortService,
     private readonly searchService: EmailSearchService,
   ) {}
 
@@ -663,5 +662,71 @@ export class EmailsController {
       parsedLimit,
       parsedThreshold,
     );
+  }
+
+  @Get('kanban/columns/:columnId/cards/filtered')
+  @ApiOperation({
+    summary: 'Get cards in a column with filtering and sorting',
+    description: 'Retrieve cards from a specific Kanban column with applied filters and sorting',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Filtered and sorted cards retrieved successfully',
+  })
+  async getFilteredColumnCards(
+    @Request() req,
+    @Param('columnId') columnId: string,
+    @Query() filterSortDto: KanbanFilterSortDto,
+  ) {
+    // Get cards for the column
+    const cards = await this.kanbanService.getColumnCards(req.user.id, columnId);
+
+    // Apply filtering and sorting
+    const processedCards = this.kanbanFilterSortService.applyFilterAndSort(
+      cards as any[],
+      filterSortDto.sortBy,
+      filterSortDto.filters,
+    );
+
+    return {
+      columnId,
+      sortBy: filterSortDto.sortBy,
+      filters: filterSortDto.filters || [],
+      count: processedCards.length,
+      cards: processedCards,
+    };
+  }
+
+  @Post('kanban/board/filtered')
+  @ApiOperation({
+    summary: 'Get entire Kanban board with filtering and sorting',
+    description: 'Retrieve the entire Kanban board with filters and sorting applied to all columns',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Filtered and sorted Kanban board retrieved successfully',
+  })
+  async getFilteredKanbanBoard(
+    @Request() req,
+    @Body() filterSortDto: KanbanFilterSortDto,
+  ) {
+    // Get full Kanban board
+    const board = await this.kanbanService.getKanbanBoard(req.user.id);
+
+    // Apply filtering and sorting to each column
+    const processedBoard = board.map((column) => ({
+      ...column,
+      cards: this.kanbanFilterSortService.applyFilterAndSort(
+        column.cards as any[],
+        filterSortDto.sortBy,
+        filterSortDto.filters,
+      ),
+    }));
+
+    return {
+      sortBy: filterSortDto.sortBy,
+      filters: filterSortDto.filters || [],
+      columns: processedBoard,
+    };
   }
 }

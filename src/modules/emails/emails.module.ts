@@ -2,12 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { EmailsController } from './emails.controller';
-import { EmailsService } from './emails.service';
-import { SnoozeService } from './snooze.service';
-import { SummaryService } from './summary.service';
-import { GmailService } from './gmail.service';
-import { KanbanService } from './kanban.service';
-import { EmailSearchService } from './search.service';
+import { EmailsService, SnoozeService, SummaryService, GmailService, KanbanService, KanbanFilterSortService, EmailSearchService } from './services';
 import { AIProviderFactory } from './providers/ai-provider.factory';
 import { AuthModule } from '../auth/auth.module';
 import { Snooze } from '../../database/entities/snooze.entity';
@@ -28,9 +23,10 @@ import { Email } from '../../database/entities/email.entity';
     GmailService,
     SummaryService,
     KanbanService,
+    KanbanFilterSortService,
     EmailSearchService,
     AIProviderFactory,
   ],
-  exports: [EmailsService, GmailService, SnoozeService, SummaryService, KanbanService, EmailSearchService, AIProviderFactory],
+  exports: [EmailsService, GmailService, SnoozeService, SummaryService, KanbanService, KanbanFilterSortService, EmailSearchService, AIProviderFactory],
 })
 export class EmailsModule {}

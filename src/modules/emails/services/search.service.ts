@@ -1,7 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { Email } from '../../database/entities/email.entity';
-import { FuzzySearchEmailDto } from './dto/fuzzy-search-email.dto';
+import { Email } from '../../../database/entities/email.entity';
+import { FuzzySearchEmailDto } from '../dto/fuzzy-search-email.dto';
 
 @Injectable()
 export class EmailSearchService {
