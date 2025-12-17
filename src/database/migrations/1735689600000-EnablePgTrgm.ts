@@ -6,17 +6,17 @@ export class EnablePgTrgm1735689600000 implements MigrationInterface {
 
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS idx_email_subject_trgm 
-       ON email USING GIN (subject gin_trgm_ops)`,
+       ON emails USING GIN (subject gin_trgm_ops)`,
     );
 
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS idx_email_from_trgm 
-       ON email USING GIN ("from" gin_trgm_ops)`,
+       ON emails USING GIN ("from_email" gin_trgm_ops)`,
     );
 
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS idx_email_body_trgm 
-       ON email USING GIN (body gin_trgm_ops)`,
+       ON emails USING GIN (body gin_trgm_ops)`,
     );
   }
 

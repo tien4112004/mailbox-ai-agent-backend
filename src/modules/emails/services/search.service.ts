@@ -23,7 +23,7 @@ export class EmailSearchService {
 
     const query = searchDto.query.trim();
     const limit = searchDto.limit || 20;
-    const threshold = searchDto.threshold || 0.3;
+    const threshold = searchDto.threshold || 0.1; // Lowered threshold for better fuzzy matching
     const fields = (searchDto.fields || 'subject,from_email')
       .split(',')
       .map((f) => f.trim())
@@ -36,6 +36,14 @@ export class EmailSearchService {
     }
 
     try {
+      // First check if user has any emails
+      const emailCountResult = await this.dataSource.query(
+        'SELECT COUNT(*)::int as count FROM emails WHERE user_id = $1',
+        [userId],
+      );
+      const emailCount = emailCountResult[0]?.count || 0;
+      this.logger.debug(`User ${userId} has ${emailCount} total emails`);
+
       const fieldConditions = fields
         .map(
           (field) =>
@@ -43,26 +51,26 @@ export class EmailSearchService {
         )
         .join(' OR ');
 
-      const similaritySelects = fields
-        .map((field) => `MAX(similarity(e."${field}", $1::text))`)
+      const similarityCase = fields
+        .map((field) => `similarity(e."${field}", $1::text)`)
         .join(', ');
 
       const sql = `
         SELECT 
           e.*,
-          ${similaritySelects} as similarity
+          GREATEST(${similarityCase}) as similarity
         FROM emails e
         WHERE 
           e.user_id = $2
           AND (${fieldConditions})
-        GROUP BY e.id
         ORDER BY similarity DESC
         LIMIT $4
       `;
 
       this.logger.debug(`Executing fuzzy search SQL for user ${userId} with query "${query}"`);
+      this.logger.debug(`Fuzzy search SQL: ${sql}`);
 
-      const results = await this.dataSource.query(sql, [
+      let results = await this.dataSource.query(sql, [
         query,
         userId,
         threshold,
@@ -72,6 +80,38 @@ export class EmailSearchService {
       this.logger.debug(
         `Fuzzy search for user ${userId} with query "${query}" returned ${results.length} results`,
       );
+
+      // Fallback: if fuzzy search returns no results but user has emails, try substring match
+      if (results.length === 0 && emailCount > 0) {
+        this.logger.debug(
+          `Fuzzy search returned 0 results. Trying fallback substring search for user ${userId}`,
+        );
+
+        const fallbackConditions = fields
+          .map((field) => `LOWER(e."${field}") LIKE LOWER($1)`)
+          .join(' OR ');
+
+        const fallbackSql = `
+          SELECT 
+            e.*,
+            0.5 as similarity
+          FROM emails e
+          WHERE 
+            e.user_id = $2
+            AND (${fallbackConditions})
+          LIMIT $3
+        `;
+
+        results = await this.dataSource.query(fallbackSql, [
+          `%${query}%`,
+          userId,
+          limit,
+        ]);
+
+        this.logger.debug(
+          `Fallback substring search for user ${userId} with query "${query}" returned ${results.length} results`,
+        );
+      }
 
       if (results.length === 0) {
         this.logger.warn(
