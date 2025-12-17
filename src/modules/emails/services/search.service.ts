@@ -39,19 +39,19 @@ export class EmailSearchService {
       const fieldConditions = fields
         .map(
           (field) =>
-            `e."${field}" % $1 AND similarity(e."${field}", $1) > $3`,
+            `e."${field}" % $1::text AND similarity(e."${field}", $1::text) > $3`,
         )
         .join(' OR ');
 
       const similaritySelects = fields
-        .map((field) => `MAX(similarity(e."${field}", $1))`)
+        .map((field) => `MAX(similarity(e."${field}", $1::text))`)
         .join(', ');
 
       const sql = `
         SELECT 
           e.*,
           ${similaritySelects} as similarity
-        FROM email e
+        FROM emails e
         WHERE 
           e.user_id = $2
           AND (${fieldConditions})
@@ -122,12 +122,12 @@ export class EmailSearchService {
       const sql = `
         SELECT 
           e.*,
-          similarity(e."${field}", $1) as similarity
-        FROM email e
+          similarity(e."${field}", $1::text) as similarity
+        FROM emails e
         WHERE 
           e.user_id = $2
-          AND e."${field}" % $1
-          AND similarity(e."${field}", $1) > $3
+          AND e."${field}" % $1::text
+          AND similarity(e."${field}", $1::text) > $3
         ORDER BY similarity DESC
         LIMIT $4
       `;
