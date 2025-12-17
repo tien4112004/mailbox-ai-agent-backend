@@ -89,7 +89,7 @@ export class CreateKanbanTablesAndCards1702000000000 implements MigrationInterfa
           {
             name: 'emailId',
             type: 'uuid',
-            isNullable: false,
+            isNullable: true,
           },
           {
             name: 'columnId',
@@ -131,17 +131,6 @@ export class CreateKanbanTablesAndCards1702000000000 implements MigrationInterfa
       true,
     );
 
-    // Add foreign key for kanban_cards to emails
-    await queryRunner.createForeignKey(
-      'kanban_cards',
-      new TableForeignKey({
-        columnNames: ['emailId'],
-        referencedColumnNames: ['id'],
-        referencedTableName: 'emails',
-        onDelete: 'CASCADE',
-      }),
-    );
-
     // Add foreign key for kanban_cards to kanban_columns
     await queryRunner.createForeignKey(
       'kanban_cards',
@@ -152,6 +141,9 @@ export class CreateKanbanTablesAndCards1702000000000 implements MigrationInterfa
         onDelete: 'CASCADE',
       }),
     );
+
+    // Note: Foreign key to emails table will be added in a later migration
+    // after the emails table is created
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
