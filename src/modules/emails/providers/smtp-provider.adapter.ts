@@ -29,7 +29,9 @@ export class SmtpProviderAdapter implements EmailProvider {
     private imapService: ImapService,
     private smtpService: SmtpService,
     private config: SmtpImapConfig,
-  ) {}
+    private userId: string,
+    private persistEmailsCallback?: (userId: string, emails: any[]) => Promise<number>,
+  ) { }
 
   async listMailboxes() {
     return this.imapService.listMailboxes(this.config.imap);
@@ -37,13 +39,25 @@ export class SmtpProviderAdapter implements EmailProvider {
 
   async listEmails(folder: string, limit: number, pageToken?: string, search?: string) {
     const page = pageToken ? parseInt(pageToken.replace('page-', '')) : 1;
-    return this.imapService.listEmails(
+    const result = await this.imapService.listEmails(
       this.config.imap,
       folder,
       limit,
       page,
       search,
     );
+
+    // Persist emails to database if callback is provided
+    if (this.persistEmailsCallback && result.emails && result.emails.length > 0) {
+      try {
+        await this.persistEmailsCallback(this.userId, result.emails);
+      } catch (error) {
+        // Log error but don't fail the request
+        console.error('Failed to persist SMTP emails to database:', error);
+      }
+    }
+
+    return result;
   }
 
   async getEmailById(emailId: string) {
