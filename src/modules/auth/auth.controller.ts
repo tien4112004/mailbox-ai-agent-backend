@@ -48,7 +48,20 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Successfully logged in' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+    const result = await this.authService.login(loginDto);
+
+    // Sync emails and initialize Kanban board in the background (don't block login)
+    this.emailsService.syncInitialEmails(result.user.id).catch((err) => {
+      console.error('Background email sync failed after login:', err);
+    });
+    this.kanbanService.initializeKanbanBoard(result.user.id).catch((err) => {
+      console.error('Background Kanban initialization failed after login:', err);
+    });
+    this.kanbanService.syncEmailsToBoard(result.user.id).catch((err) => {
+      console.error('Background Kanban sync failed after login:', err);
+    });
+
+    return result;
   }
 
   @Post('google')

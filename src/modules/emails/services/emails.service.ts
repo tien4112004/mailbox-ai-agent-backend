@@ -26,7 +26,8 @@ export class EmailsService {
   ) { }
 
   /**
-   * Sync initial emails from Gmail inbox to database (last 3 days)
+   * Sync initial emails from Gmail inbox to database
+   * Removes old emails and fetches up to 100 new emails from Gmail INBOX
    */
   async syncInitialEmails(userId: string): Promise<number> {
     try {
@@ -44,6 +45,12 @@ export class EmailsService {
       }
 
       this.logger.debug(`Retrieved Gmail tokens for user ${userId}`);
+
+      // Delete all existing emails for this user to ensure fresh sync
+      const deleteResult = await this.emailRepository.delete({ userId });
+      this.logger.log(
+        `Deleted ${deleteResult.affected} old emails for user ${userId}`,
+      );
 
       // Fetch emails from Gmail inbox
       let result;
@@ -69,21 +76,10 @@ export class EmailsService {
 
       this.logger.log(`Fetched ${result.emails.length} emails from Gmail INBOX for user ${userId}`);
 
-      // Filter emails from last 3 days
-      const threeDaysAgo = new Date();
-      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+      // Use all fetched emails (no 3-day filter)
+      const recentEmails = result.emails;
 
-      const recentEmails = result.emails.filter((email: any) => {
-        const emailDate = new Date(email.date);
-        return emailDate >= threeDaysAgo;
-      });
-
-      if (recentEmails.length === 0) {
-        this.logger.log(`No recent emails from last 3 days for user ${userId}`);
-        return 0;
-      }
-
-      this.logger.log(`Found ${recentEmails.length} recent emails from last 3 days for user ${userId}`);
+      this.logger.log(`Found ${recentEmails.length} emails from Gmail for user ${userId}`);
 
       // Convert Gmail emails to Email entity format
       const emailsToSave = recentEmails.map((gmailEmail: any) => {
@@ -103,34 +99,14 @@ export class EmailsService {
         });
       });
 
-      // Save emails, ignoring duplicates
-      const savedEmails = await Promise.all(
-        emailsToSave.map(async (email) => {
-          // Check if email already exists (by unique combination of userId, fromEmail, subject, and date)
-          const existing = await this.emailRepository.findOne({
-            where: {
-              userId,
-              fromEmail: email.fromEmail,
-              subject: email.subject,
-              createdAt: email.createdAt,
-            },
-          });
+      // Save all emails (no duplicate check since we already deleted old ones)
+      const savedEmails = await this.emailRepository.save(emailsToSave);
 
-          if (existing) {
-            this.logger.debug(`Email already exists, skipping: ${email.subject} from ${email.fromEmail}`);
-            return null; // Skip duplicate
-          }
-
-          return this.emailRepository.save(email);
-        }),
-      );
-
-      const savedCount = savedEmails.filter((e) => e !== null).length;
       this.logger.log(
-        `Successfully synced ${savedCount} recent emails to database for user ${userId}`,
+        `Successfully synced ${savedEmails.length} emails to database for user ${userId}`,
       );
 
-      return savedCount;
+      return savedEmails.length;
     } catch (error) {
       this.logger.error(
         `Error syncing initial emails for user ${userId}:`,
