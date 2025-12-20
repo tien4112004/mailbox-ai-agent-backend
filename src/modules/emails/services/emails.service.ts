@@ -23,7 +23,7 @@ export class EmailsService {
     private gmailService: GmailService,
     private authService: AuthService,
     private emailProviderFactory: EmailProviderFactory,
-  ) {}
+  ) { }
 
   /**
    * Sync initial emails from Gmail inbox to database (last 3 days)
@@ -31,7 +31,7 @@ export class EmailsService {
   async syncInitialEmails(userId: string): Promise<number> {
     try {
       this.logger.log(`Starting initial email sync for user ${userId}`);
-      
+
       let tokens;
       try {
         tokens = await this.authService.getGmailTokens(userId);
@@ -42,9 +42,9 @@ export class EmailsService {
         );
         throw error;
       }
-      
+
       this.logger.debug(`Retrieved Gmail tokens for user ${userId}`);
-      
+
       // Fetch emails from Gmail inbox
       let result;
       try {
@@ -140,6 +140,64 @@ export class EmailsService {
     }
   }
 
+  /**
+   * Persist emails to database, avoiding duplicates
+   */
+  async persistEmails(userId: string, emails: any[]): Promise<number> {
+    try {
+      const emailsToSave = emails.map((email) => {
+        return this.emailRepository.create({
+          subject: email.subject || '',
+          body: email.body || '',
+          preview: email.snippet || '',
+          fromName: email.from?.name || '',
+          fromEmail: email.from?.email || email.from || '',
+          toEmail: Array.isArray(email.to) ? email.to : [],
+          read: email.isRead !== undefined ? email.isRead : !email.labelIds?.includes('UNREAD'),
+          starred: email.isStarred !== undefined ? email.isStarred : email.labelIds?.includes('STARRED') || false,
+          folder: email.folder || 'INBOX',
+          attachments: email.attachments || null,
+          userId,
+          createdAt: new Date(email.date),
+        });
+      });
+
+      const savedEmails = await Promise.all(
+        emailsToSave.map(async (email) => {
+          // Check if email already exists (by unique combination of userId, fromEmail, subject, and date)
+          const existing = await this.emailRepository.findOne({
+            where: {
+              userId,
+              fromEmail: email.fromEmail,
+              subject: email.subject,
+              createdAt: email.createdAt,
+            },
+          });
+
+          if (existing) {
+            this.logger.debug(`Email already exists, skipping: ${email.subject} from ${email.fromEmail}`);
+            return null; // Skip duplicate
+          }
+
+          return this.emailRepository.save(email);
+        }),
+      );
+
+      const savedCount = savedEmails.filter((e) => e !== null).length;
+      this.logger.log(
+        `Successfully persisted ${savedCount} emails to database for user ${userId}`,
+      );
+
+      return savedCount;
+    } catch (error) {
+      this.logger.error(
+        `Error persisting emails for user ${userId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
   async getMailboxes(userId: string) {
     const provider = await this.emailProviderFactory.createProvider(userId);
     const mailboxes = await provider.listMailboxes();
@@ -148,15 +206,15 @@ export class EmailsService {
 
   async getEmails(userId: string, dto: GetEmailsDto) {
     const provider = await this.emailProviderFactory.createProvider(userId);
-    
+
     let { folder = 'INBOX', search, page = 1, limit = 20, pageToken } = dto;
-    
+
     // Normalize folder to uppercase (Gmail labels are case-sensitive)
     folder = folder.toUpperCase();
 
     // Create cache key
     const cacheKey = `${userId}-${folder}-${limit}`;
-    
+
     // If page > 1 and no pageToken provided, try to get from cache
     if (page > 1 && !pageToken) {
       const userCache = pageTokenCache.get(cacheKey);
@@ -250,7 +308,7 @@ export class EmailsService {
 
   async getEmailById(userId: string, emailId: string) {
     const provider = await this.emailProviderFactory.createProvider(userId);
-    
+
     const email = await provider.getEmailById(emailId);
 
     if (!email) {
@@ -262,7 +320,7 @@ export class EmailsService {
 
   async sendEmail(userId: string, dto: SendEmailDto) {
     const provider = await this.emailProviderFactory.createProvider(userId);
-    
+
     const result = await provider.sendEmail(
       dto.to,
       dto.subject,
@@ -280,18 +338,18 @@ export class EmailsService {
 
   async replyToEmail(userId: string, emailId: string, dto: ReplyEmailDto) {
     const provider = await this.emailProviderFactory.createProvider(userId);
-    
+
     // Get original email to extract metadata
     const originalEmail = await provider.getEmailById(emailId);
 
     // Prepare reply
-    const to = dto.replyAll 
+    const to = dto.replyAll
       ? [originalEmail.from.email, ...originalEmail.to.filter((addr: string) => addr !== originalEmail.from.email)]
       : [originalEmail.from.email];
-    
+
     const cc = dto.replyAll ? originalEmail.cc : (dto.cc || []);
-    const subject = originalEmail.subject.startsWith('Re:') 
-      ? originalEmail.subject 
+    const subject = originalEmail.subject.startsWith('Re:')
+      ? originalEmail.subject
       : `Re: ${originalEmail.subject}`;
 
     const result = await provider.sendEmail(
@@ -313,7 +371,7 @@ export class EmailsService {
 
   async modifyEmail(userId: string, emailId: string, dto: ModifyEmailDto) {
     const provider = await this.emailProviderFactory.createProvider(userId);
-    
+
     const addLabelIds: string[] = dto.addLabels || [];
     const removeLabelIds: string[] = dto.removeLabels || [];
 
@@ -355,7 +413,7 @@ export class EmailsService {
 
   async deleteEmail(userId: string, emailId: string) {
     const provider = await this.emailProviderFactory.createProvider(userId);
-    
+
     await provider.deleteEmail(emailId);
 
     return { message: 'Email deleted permanently' };
@@ -367,7 +425,7 @@ export class EmailsService {
     attachmentId: string,
   ) {
     const provider = await this.emailProviderFactory.createProvider(userId);
-    
+
     const attachment = await provider.getAttachment(messageId, attachmentId);
 
     return attachment;
@@ -379,12 +437,12 @@ export class EmailsService {
 
   async toggleStar(userId: string, emailId: string) {
     const provider = await this.emailProviderFactory.createProvider(userId);
-    
+
     // Get current email to check if starred
     const email = await provider.getEmailById(emailId);
 
     const isStarred = email.labelIds?.includes('STARRED') || email.isStarred || false;
-    
+
     return this.modifyEmail(userId, emailId, { starred: !isStarred });
   }
 
