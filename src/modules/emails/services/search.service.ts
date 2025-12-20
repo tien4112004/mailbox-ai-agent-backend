@@ -44,47 +44,135 @@ export class EmailSearchService {
       const emailCount = emailCountResult[0]?.count || 0;
       this.logger.debug(`User ${userId} has ${emailCount} total emails`);
 
-      const fieldConditions = fields
-        .map(
-          (field) =>
-            `e."${field}" % $1::text AND similarity(e."${field}", $1::text) > $3`,
-        )
-        .join(' OR ');
+      let results = [];
+      if (emailCount > 0) {
+        this.logger.debug(
+          `Executing primary substring + word-level Levenshtein search for user ${userId} with query "${query}"`,
+        );
 
-      const similarityCase = fields
-        .map((field) => `similarity(e."${field}", $1::text)`)
-        .join(', ');
+        const maxDistance = query.length <= 3 ? 2 : 3;
 
-      const sql = `
-        SELECT 
-          e.*,
-          GREATEST(${similarityCase}) as similarity
-        FROM emails e
-        WHERE 
-          e.user_id = $2
-          AND (${fieldConditions})
-        ORDER BY similarity DESC
-        LIMIT $4
-      `;
+        // Build OR conditions for substring matching + word-level Levenshtein
+        const wordMatchConditions = fields
+          .map(
+            (field) =>
+              `(
+                LOWER(e."${field}") LIKE LOWER('%' || $1::text || '%')
+                OR EXISTS (
+                  SELECT 1 FROM (
+                    SELECT levenshtein($1::text, word) as dist
+                    FROM regexp_split_to_table(LOWER(e."${field}"), '[^a-z0-9]+') AS word
+                    WHERE length(word) > 0
+                  ) matches
+                  WHERE matches.dist <= $3
+                )
+              )`,
+          )
+          .join(' OR ');
 
-      this.logger.debug(`Executing fuzzy search SQL for user ${userId} with query "${query}"`);
-      this.logger.debug(`Fuzzy search SQL: ${sql}`);
+        const levenshteinSql = `
+          SELECT 
+            e.*,
+            0.5 as similarity
+          FROM emails e
+          WHERE 
+            e.user_id = $2
+            AND (${wordMatchConditions})
+          ORDER BY e.created_at DESC
+          LIMIT $4
+        `;
 
-      let results = await this.dataSource.query(sql, [
-        query,
-        userId,
-        threshold,
-        limit,
-      ]);
+        try {
+          results = await this.dataSource.query(levenshteinSql, [
+            query,
+            userId,
+            maxDistance,
+            limit,
+          ]);
 
-      this.logger.debug(
-        `Fuzzy search for user ${userId} with query "${query}" returned ${results.length} results`,
-      );
+          this.logger.debug(
+            `Word-level Levenshtein search for user ${userId} with query "${query}" returned ${results.length} results`,
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Word-level search failed, falling back to simple substring: ${error.message}`,
+          );
+          // Fallback to simple substring search
+          const fallbackConditions = fields
+            .map((field) => `LOWER(e."${field}") LIKE LOWER('%' || $1::text || '%')`)
+            .join(' OR ');
 
-      // Fallback: if fuzzy search returns no results but user has emails, try substring match
+          const fallbackSql = `
+            SELECT 
+              e.*,
+              0.5 as similarity
+            FROM emails e
+            WHERE 
+              e.user_id = $2
+              AND (${fallbackConditions})
+            ORDER BY e.created_at DESC
+            LIMIT $3
+          `;
+
+          results = await this.dataSource.query(fallbackSql, [
+            query,
+            userId,
+            limit,
+          ]);
+
+          this.logger.debug(
+            `Fallback substring search returned ${results.length} results`,
+          );
+        }
+      }
+
+      // Fallback 1: Trigram similarity (if Levenshtein not available or returns 0)
       if (results.length === 0 && emailCount > 0) {
         this.logger.debug(
-          `Fuzzy search returned 0 results. Trying fallback substring search for user ${userId}`,
+          `Levenshtein unavailable/empty. Trying trigram similarity search for user ${userId}`,
+        );
+
+        const fieldConditions = fields
+          .map(
+            (field) =>
+              `e."${field}" % $1::text AND similarity(e."${field}", $1::text) > $3`,
+          )
+          .join(' OR ');
+
+        const similarityCase = fields
+          .map((field) => `similarity(e."${field}", $1::text)`)
+          .join(', ');
+
+        const sql = `
+          SELECT 
+            e.*,
+            GREATEST(${similarityCase}) as similarity
+          FROM emails e
+          WHERE 
+            e.user_id = $2
+            AND (${fieldConditions})
+          ORDER BY similarity DESC
+          LIMIT $4
+        `;
+
+        this.logger.debug(`Executing trigram search SQL for user ${userId} with query "${query}"`);
+
+        results = await this.dataSource.query(sql, [
+          query,
+          userId,
+          threshold,
+          limit,
+        ]);
+
+        this.logger.debug(
+          `Trigram search for user ${userId} with query "${query}" returned ${results.length} results`,
+        );
+      }
+
+      // Fallback 2: Substring LIKE match (if trigram also returns 0)
+      if (results.length === 0 && emailCount > 0) {
+        this.logger.debug(
+          `Trigram search returned 0 results. Trying fallback substring LIKE search for user ${userId}`,
         );
 
         const fallbackConditions = fields
@@ -109,7 +197,7 @@ export class EmailSearchService {
         ]);
 
         this.logger.debug(
-          `Fallback substring search for user ${userId} with query "${query}" returned ${results.length} results`,
+          `Substring LIKE search for user ${userId} with query "${query}" returned ${results.length} results`,
         );
       }
 
