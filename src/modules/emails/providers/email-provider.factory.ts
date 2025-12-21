@@ -27,8 +27,9 @@ export class EmailProviderFactory {
 
   /**
    * Persist emails to database callback for SMTP provider
+   * Returns the saved emails with their database IDs
    */
-  private async persistEmailsCallback(userId: string, emails: any[]): Promise<number> {
+  private async persistEmailsCallback(userId: string, emails: any[]): Promise<any[]> {
     const logger = new Logger(EmailProviderFactory.name);
     try {
       const emailsToSave = emails.map((email) => {
@@ -43,6 +44,8 @@ export class EmailProviderFactory {
           starred: email.isStarred !== undefined ? email.isStarred : email.labelIds?.includes('STARRED') || false,
           folder: email.folder || 'INBOX',
           attachments: email.attachments || null,
+          threadId: email.threadId || null,
+          messageId: email.messageId || email.threadId || null,
           userId,
           createdAt: new Date(email.date),
         });
@@ -50,7 +53,22 @@ export class EmailProviderFactory {
 
       const savedEmails = await Promise.all(
         emailsToSave.map(async (email) => {
-          // Check if email already exists
+          // Check if email already exists using messageId (unique identifier)
+          if (email.messageId) {
+            const existing = await this.emailRepository.findOne({
+              where: {
+                userId,
+                messageId: email.messageId,
+              },
+            });
+
+            if (existing) {
+              logger.debug(`Email already exists (messageId: ${email.messageId}), returning existing: ${email.subject}`);
+              return existing;
+            }
+          }
+
+          // Fallback: check using subject, from, and date if no messageId
           const existing = await this.emailRepository.findOne({
             where: {
               userId,
@@ -61,17 +79,22 @@ export class EmailProviderFactory {
           });
 
           if (existing) {
-            logger.debug(`Email already exists, skipping: ${email.subject}`);
-            return null;
+            logger.debug(`Email already exists (fallback match), returning existing: ${email.subject}`);
+            return existing;
           }
 
           return this.emailRepository.save(email);
         }),
       );
 
-      const savedCount = savedEmails.filter((e) => e !== null).length;
-      logger.log(`Persisted ${savedCount} SMTP emails for user ${userId}`);
-      return savedCount;
+      const newCount = savedEmails.filter((e, idx) => {
+        // Check if email is newly saved (not existing)
+        const email = emailsToSave[idx];
+        return e.id !== undefined;
+      }).length;
+      
+      logger.log(`Persisted ${newCount} new SMTP emails for user ${userId}, total returned: ${savedEmails.length}`);
+      return savedEmails;
     } catch (error) {
       logger.error(`Error persisting SMTP emails for user ${userId}:`, error);
       throw error;
@@ -122,6 +145,7 @@ export class EmailProviderFactory {
           emailAddress: smtpConfig.emailAddress,
         },
         userId,
+        this.emailRepository,
         this.persistEmailsCallback.bind(this),
       );
     } else {

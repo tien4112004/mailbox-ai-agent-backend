@@ -12,6 +12,7 @@ import { User } from './user.entity';
 @Entity('emails')
 @Index(['userId', 'folder', 'createdAt'])
 @Index(['userId', 'folder'])
+@Index(['userId', 'messageId'], { unique: true })
 export class Email {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -42,6 +43,9 @@ export class Email {
 
   @Column({ default: 'inbox' })
   folder: string;
+
+  @Column({ name: 'message_id', nullable: true })
+  messageId: string;
 
   @Column('jsonb', { nullable: true })
   attachments: Array<{

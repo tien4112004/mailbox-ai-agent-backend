@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { Repository } from 'typeorm';
 import { EmailProvider } from '../interfaces/email-provider.interface';
 import { ImapService } from '../imap.service';
 import { SmtpService } from '../smtp.service';
+import { Email } from '../../../database/entities/email.entity';
 
 interface SmtpImapConfig {
   imap: {
@@ -30,15 +32,54 @@ export class SmtpProviderAdapter implements EmailProvider {
     private smtpService: SmtpService,
     private config: SmtpImapConfig,
     private userId: string,
-    private persistEmailsCallback?: (userId: string, emails: any[]) => Promise<number>,
+    private emailRepository: Repository<Email>,
+    private persistEmailsCallback?: (userId: string, emails: any[]) => Promise<any[]>,
   ) { }
 
   async listMailboxes() {
     return this.imapService.listMailboxes(this.config.imap);
   }
 
-  async listEmails(folder: string, limit: number, pageToken?: string, search?: string) {
+  async listEmails(folder: string, limit: number, pageToken?: string, search?: string, forceSync: boolean = false) {
     const page = pageToken ? parseInt(pageToken.replace('page-', '')) : 1;
+    
+    // If not forcing sync, try to get from database first
+    if (!forceSync) {
+      try {
+        const skip = (page - 1) * limit;
+        const queryBuilder = this.emailRepository
+          .createQueryBuilder('email')
+          .where('email.userId = :userId', { userId: this.userId })
+          .andWhere('UPPER(email.folder) = UPPER(:folder)', { folder });
+
+        // Add search if provided
+        if (search) {
+          queryBuilder.andWhere(
+            '(email.subject ILIKE :search OR email.fromEmail ILIKE :search OR email.fromName ILIKE :search OR email.body ILIKE :search)',
+            { search: `%${search}%` }
+          );
+        }
+
+        const [dbEmails, total] = await queryBuilder
+          .orderBy('email.createdAt', 'DESC')
+          .skip(skip)
+          .take(limit)
+          .getManyAndCount();
+
+        // If we have emails in database, return them
+        if (dbEmails.length > 0 || page > 1) {
+          return {
+            emails: dbEmails.map(email => this.formatEmailResponse(email)),
+            resultSizeEstimate: total,
+            nextPageToken: skip + limit < total ? `page-${page + 1}` : undefined,
+          };
+        }
+      } catch (error) {
+        console.error('Error querying database, falling back to SMTP fetch:', error);
+      }
+    }
+    
+    // Step 1: Fetch emails from SMTP/IMAP (on first load or force sync)
     const result = await this.imapService.listEmails(
       this.config.imap,
       folder,
@@ -47,12 +88,19 @@ export class SmtpProviderAdapter implements EmailProvider {
       search,
     );
 
-    // Persist emails to database if callback is provided
+    // Step 2: Persist emails to database and get the saved emails with IDs
     if (this.persistEmailsCallback && result.emails && result.emails.length > 0) {
       try {
-        await this.persistEmailsCallback(this.userId, result.emails);
+        const savedEmails = await this.persistEmailsCallback(this.userId, result.emails);
+        
+        // Step 3: Return the saved emails from database instead of raw IMAP emails
+        return {
+          emails: savedEmails.map(email => this.formatEmailResponse(email)),
+          resultSizeEstimate: result.resultSizeEstimate,
+          nextPageToken: result.nextPageToken,
+        };
       } catch (error) {
-        // Log error but don't fail the request
+        // Log error but don't fail the request - fallback to IMAP emails
         console.error('Failed to persist SMTP emails to database:', error);
       }
     }
@@ -60,8 +108,57 @@ export class SmtpProviderAdapter implements EmailProvider {
     return result;
   }
 
+  private formatEmailResponse(email: any) {
+    return {
+      id: email.id,
+      subject: email.subject,
+      body: email.body,
+      snippet: email.preview,
+      from: {
+        name: email.fromName,
+        email: email.fromEmail,
+      },
+      to: email.toEmail,
+      date: email.createdAt,
+      read: email.read,
+      starred: email.starred,
+      folder: email.folder,
+      attachments: email.attachments || [],
+      threadId: email.threadId,
+    };
+  }
+
   async getEmailById(emailId: string) {
-    return this.imapService.getEmailById(this.config.imap, emailId);
+    // Query database by UUID instead of using IMAP UID
+    const email = await this.emailRepository.findOne({
+      where: {
+        id: emailId,
+        userId: this.userId,
+      },
+    });
+
+    if (!email) {
+      return null;
+    }
+
+    // Return in the expected format
+    return {
+      id: email.id,
+      subject: email.subject,
+      body: email.body,
+      snippet: email.preview,
+      from: {
+        name: email.fromName,
+        email: email.fromEmail,
+      },
+      to: email.toEmail,
+      date: email.createdAt,
+      read: email.read,
+      starred: email.starred,
+      folder: email.folder,
+      attachments: email.attachments || [],
+      threadId: email.threadId,
+    };
   }
 
   async sendEmail(

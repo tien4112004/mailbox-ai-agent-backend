@@ -14,6 +14,7 @@ interface ImapConfig {
 interface EmailMessage {
   id: string;
   threadId: string;
+  messageId: string;
   from: {
     email: string;
     name?: string;
@@ -294,6 +295,7 @@ export class ImapService {
     return {
       id: uid,
       threadId: parsed.messageId || uid,
+      messageId: parsed.messageId || `${uid}@imap`,
       from: {
         email: from?.address || '',
         name: from?.name,
