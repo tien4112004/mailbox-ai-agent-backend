@@ -14,7 +14,7 @@ export class GmailProviderAdapter implements EmailProvider {
     return this.gmailService.listMailboxes(this.accessToken, this.refreshToken);
   }
 
-  async listEmails(folder: string, limit: number, pageToken?: string, search?: string) {
+  async listEmails(folder: string, limit: number, pageToken?: string, search?: string, forceSync?: boolean) {
     return this.gmailService.listEmails(
       this.accessToken,
       this.refreshToken,

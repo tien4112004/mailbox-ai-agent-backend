@@ -207,7 +207,7 @@ export class EmailsService {
   async getEmails(userId: string, dto: GetEmailsDto) {
     const provider = await this.emailProviderFactory.createProvider(userId);
 
-    let { folder = 'INBOX', search, page = 1, limit = 20, pageToken } = dto;
+    let { folder = 'INBOX', search, page = 1, limit = 20, pageToken, forceSync = false } = dto;
 
     // Normalize folder to uppercase (Gmail labels are case-sensitive)
     folder = folder.toUpperCase();
@@ -228,6 +228,7 @@ export class EmailsService {
       limit,
       pageToken,
       search,
+      forceSync,
     );
 
     // Store next page token in cache

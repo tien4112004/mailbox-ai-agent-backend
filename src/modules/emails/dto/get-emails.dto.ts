@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsInt, Min } from 'class-validator';
+import { IsOptional, IsString, IsInt, Min, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class GetEmailsDto {
@@ -31,4 +31,10 @@ export class GetEmailsDto {
   @IsOptional()
   @IsString()
   pageToken?: string;
+
+  @ApiPropertyOptional({ example: false, description: 'Force sync from SMTP server (default: false, uses database cache)' })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  forceSync?: boolean = false;
 }
