@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { EmailProvider } from '../interfaces/email-provider.interface';
 import { ImapService } from '../imap.service';
@@ -27,6 +27,7 @@ interface SmtpImapConfig {
 
 @Injectable()
 export class SmtpProviderAdapter implements EmailProvider {
+  private readonly logger = new Logger(SmtpProviderAdapter.name);
   constructor(
     private imapService: ImapService,
     private smtpService: SmtpService,
@@ -75,7 +76,7 @@ export class SmtpProviderAdapter implements EmailProvider {
           };
         }
       } catch (error) {
-        console.error('Error querying database, falling back to SMTP fetch:', error);
+        this.logger.error('Error querying database, falling back to SMTP fetch:', error?.stack || error);
       }
     }
     
@@ -101,7 +102,7 @@ export class SmtpProviderAdapter implements EmailProvider {
         };
       } catch (error) {
         // Log error but don't fail the request - fallback to IMAP emails
-        console.error('Failed to persist SMTP emails to database:', error);
+        this.logger.error('Failed to persist SMTP emails to database:', error?.stack || error);
       }
     }
 
@@ -124,6 +125,7 @@ export class SmtpProviderAdapter implements EmailProvider {
       starred: email.starred,
       folder: email.folder,
       attachments: email.attachments || [],
+      threadId: email.threadId,
     };
   }
 
@@ -156,6 +158,7 @@ export class SmtpProviderAdapter implements EmailProvider {
       starred: email.starred,
       folder: email.folder,
       attachments: email.attachments || [],
+      threadId: email.threadId,
     };
   }
 

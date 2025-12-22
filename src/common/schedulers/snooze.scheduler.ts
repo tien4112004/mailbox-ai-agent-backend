@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { SnoozeService } from '../../modules/emails/services/snooze.service';
 
 @Injectable()
 export class SnoozeSchedulerService {
+  private readonly logger = new Logger(SnoozeSchedulerService.name);
   constructor(private snoozeService: SnoozeService) {}
 
   /**
@@ -15,15 +16,12 @@ export class SnoozeSchedulerService {
       const resumedSnoozes =
         await this.snoozeService.resumeDueSnoozedEmails();
       if (resumedSnoozes.length > 0) {
-        console.log(
+        this.logger.log(
           `Resumed ${resumedSnoozes.length} snoozed emails at ${new Date().toISOString()}`,
         );
       }
     } catch (error) {
-      console.error(
-        'Error in snooze scheduler:',
-        error,
-      );
+      this.logger.error('Error in snooze scheduler:', error?.stack || error);
     }
   }
 }

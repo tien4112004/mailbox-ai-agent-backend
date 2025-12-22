@@ -7,7 +7,7 @@
 "Here is what we will cover today. We'll look at the current state of AI coding, identify the problems we face, and then dive deep into Spec-kit Development—what it is, how it works, and why it's the future."
 
 ## Slide 3: The Current State of AI Coding
-"Currently, most of us use AI in three ways. We use Chatbots like ChatGPT for exploration. We use Autocomplete tools like Copilot for speed. And we are starting to see Agentic tools that try to do everything. But they all have limitations."
+"Currently, most of us use AI in three ways. We use chat-based assistants for exploration. We use Autocomplete tools like Copilot for speed. And we are starting to see Agentic tools that try to do everything. But they all have limitations."
 
 ## Slide 4: The Problem: Context Drift
 "The biggest problem is Context Drift. In a long chat, the AI forgets what you said at the beginning. It's like the 'Goldfish Memory' effect. It hallucinates because it lacks the full picture of your project."
