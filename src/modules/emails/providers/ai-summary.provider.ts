@@ -1,9 +1,8 @@
-import { SummaryLength, SummaryTone, AIProvider } from '../constants/summary.constants';
+import { SummaryLength, SummaryTone } from '../constants/summary.constants';
 
 export interface SummarizeEmailDto {
   length?: SummaryLength;
   tone?: SummaryTone;
-  provider?: AIProvider;
   customInstructions?: string;
 }
 
@@ -32,7 +31,7 @@ export interface IAISummaryProvider {
   getModel(): string;
 }
 
-export { AIProvider };
+// AIProvider enum removed - single Gemini provider only
 
 export abstract class BaseAISummaryProvider implements IAISummaryProvider {
   protected readonly logger: any; // Logger will be injected by NestJS

@@ -1,30 +1,24 @@
-import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Logger, Inject } from '@nestjs/common';
 import { SummarizeEmailDto } from '../dto/summarize-email.dto';
-import { EmailContent } from '../providers';
-import { AIProvider } from '../constants/summary.constants';
-import { AIProviderFactory } from '../providers/ai-provider.factory';
+import { EmailContent, IAISummaryProvider } from '../providers';
 
 @Injectable()
 export class SummaryService {
   private readonly logger = new Logger(SummaryService.name);
 
-  constructor(private readonly providerFactory: AIProviderFactory) {}
+  constructor(@Inject('AI_SUMMARY_PROVIDER') private readonly provider: IAISummaryProvider) {}
 
   async generateSummary(
     emailContent: EmailContent,
     options: SummarizeEmailDto,
-    providerOverride?: AIProvider,
   ): Promise<string> {
     try {
-      // Get the appropriate provider (use override if specified, otherwise use default)
-      const provider = this.providerFactory.getProvider(providerOverride);
-
       this.logger.debug(
-        `Generating summary using ${provider.getProviderName()} (${provider.getModel()})`,
+        `Generating summary using ${this.provider.getProviderName()} (${this.provider.getModel()})`,
       );
 
-      // Generate summary using the selected provider
-      const summary = await provider.generateSummary(emailContent, options);
+      // Generate summary using Gemini provider
+      const summary = await this.provider.generateSummary(emailContent, options);
 
       return summary;
     } catch (error) {
@@ -46,8 +40,8 @@ export class SummaryService {
     available: string[];
   } {
     return {
-      default: this.providerFactory.getDefaultProviderName(),
-      available: this.providerFactory.getAvailableProviders(),
+      default: this.provider.getProviderName(),
+      available: [this.provider.getProviderName()],
     };
   }
 }
