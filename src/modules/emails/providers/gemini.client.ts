@@ -11,7 +11,7 @@ export class GeminiClient {
 
   async embed(text: string): Promise<number[]> {
     try {
-      const response = await this.ai.models.embedContent({ model: this.model, contents: [text] });
+      const response = await this.ai.gemini.embedContent?.({ model: this.model, contents: [text] });
 
       // SDK typically returns an object with embeddings; try a few shapes
       const emb = response?.embeddings?.[0]?.embedding || response?.data?.[0]?.embedding || response?.outputs?.[0]?.embedding || null;
@@ -31,7 +31,7 @@ export class GeminiClient {
 
       if (found) return found;
 
-      this.logger.error('No embedding found in Gemini response', JSON.stringify(response));
+  this.logger.error('No embedding found in Gemini response', JSON.stringify(response));
       throw new Error('No embedding returned from Gemini SDK');
     } catch (err) {
       this.logger.error('Gemini embed error', err as any);
