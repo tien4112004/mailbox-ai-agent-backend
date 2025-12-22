@@ -12,6 +12,7 @@ import {
   Headers,
   Inject,
   forwardRef,
+  Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -25,6 +26,7 @@ import { KanbanService } from '../emails/services/kanban.service';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
   constructor(
     private readonly authService: AuthService,
     @Inject(forwardRef(() => EmailsService))
@@ -52,13 +54,13 @@ export class AuthController {
 
     // Sync emails and initialize Kanban board in the background (don't block login)
     this.emailsService.syncInitialEmails(result.user.id).catch((err) => {
-      console.error('Background email sync failed after login:', err);
+      this.logger.error('Background email sync failed after login:', err?.stack || err);
     });
     this.kanbanService.initializeKanbanBoard(result.user.id).catch((err) => {
-      console.error('Background Kanban initialization failed after login:', err);
+      this.logger.error('Background Kanban initialization failed after login:', err?.stack || err);
     });
     this.kanbanService.syncEmailsToBoard(result.user.id).catch((err) => {
-      console.error('Background Kanban sync failed after login:', err);
+      this.logger.error('Background Kanban sync failed after login:', err?.stack || err);
     });
 
     return result;
@@ -152,7 +154,7 @@ export class AuthController {
         // Sync emails to Kanban board cards
         await this.kanbanService.syncEmailsToBoard(result.user.id);
       } catch (err) {
-        console.error('Error syncing emails or initializing Kanban board:', err);
+        this.logger.error('Error syncing emails or initializing Kanban board:', err?.stack || err);
         // Don't fail login if sync fails
       }
       

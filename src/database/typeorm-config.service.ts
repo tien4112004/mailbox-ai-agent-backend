@@ -11,7 +11,9 @@ export default registerAs(
       type: 'postgres',
       url: config.url,
       entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-      logging: process.env.NODE_ENV === 'development',
+  // Disable TypeORM query logging by default to avoid leaking SQL/parameters.
+  // Enable explicitly for debugging with DB_LOG_QUERIES=true
+  logging: process.env.DB_LOG_QUERIES === 'true' ? ['query', 'error', 'warn'] : false,
       migrations: [__dirname + '/../database/migrations/*{.ts,.js}'],
       migrationsTableName: 'migrations',
       migrationsRun: false,

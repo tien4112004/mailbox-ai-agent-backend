@@ -7,6 +7,7 @@ import { ReplyEmailDto } from '../dto/reply-email.dto';
 import { ModifyEmailDto } from '../dto/modify-email.dto';
 import { Email } from '../../../database/entities/email.entity';
 import { GmailService } from './gmail.service';
+import { EmailSearchService } from './search.service';
 import { EmailProviderFactory } from '../providers/email-provider.factory';
 import { AuthService } from '../../auth/auth.service';
 
@@ -23,6 +24,7 @@ export class EmailsService {
     private gmailService: GmailService,
     private authService: AuthService,
     private emailProviderFactory: EmailProviderFactory,
+    private emailSearchService: EmailSearchService,
   ) { }
 
   /**
@@ -155,7 +157,14 @@ export class EmailsService {
             return null; // Skip duplicate
           }
 
-          return this.emailRepository.save(email);
+          const saved = await this.emailRepository.save(email);
+
+          // Fire-and-forget: index embedding for semantic search (do not block response)
+          this.emailSearchService.indexEmailEmbedding(saved.id).catch((err) =>
+            this.logger.warn(`Failed to index embedding for email ${saved.id}: ${err.message}`),
+          );
+
+          return saved;
         }),
       );
 
@@ -232,7 +241,7 @@ export class EmailsService {
    * Normalize email response format for consistent FE handling
    * Converts both database and Gmail API formats to a unified structure
    */
-  private normalizeEmailResponse(email: any, isFromDatabase: boolean = false) {
+  normalizeEmailResponse(email: any, isFromDatabase: boolean = false) {
     if (isFromDatabase) {
       // Database format -> Unified format
       return {

@@ -2,7 +2,6 @@ import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IAISummaryProvider, AIProviderConfig } from './ai-summary.provider';
 import { AIProvider } from '../constants/summary.constants';
-import { OpenAIAdapter } from './openai.adapter';
 import { GeminiAdapter } from './gemini.adapter';
 
 @Injectable()
@@ -15,22 +14,7 @@ export class AIProviderFactory {
   }
 
   private initializeProviders(): void {
-    // Initialize OpenAI provider
-    const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
-    const openaiModel = this.configService.get<string>(
-      'OPENAI_MODEL',
-      'gpt-3.5-turbo',
-    );
-    if (openaiKey) {
-      this.providers.set(
-        AIProvider.OPENAI,
-        new OpenAIAdapter({
-          apiKey: openaiKey,
-          model: openaiModel,
-        }),
-      );
-      this.logger.debug('OpenAI provider initialized');
-    }
+    // OpenAI/GPT support removed. Only Gemini (Google) is supported now.
 
     // Initialize Gemini provider
     const geminiKey = this.configService.get<string>('GEMINI_API_KEY');
@@ -50,9 +34,7 @@ export class AIProviderFactory {
     }
 
     if (this.providers.size === 0) {
-      this.logger.warn(
-        'No AI providers configured. Please set OPENAI_API_KEY or GEMINI_API_KEY',
-      );
+      this.logger.warn('No AI providers configured. Please set GEMINI_API_KEY');
     }
   }
 
@@ -70,10 +52,7 @@ export class AIProviderFactory {
     }
 
     // Otherwise, get default provider
-    const defaultProvider = this.configService.get<AIProvider>(
-      'SUMMARY_PROVIDER',
-      AIProvider.OPENAI,
-    );
+    const defaultProvider = this.configService.get<AIProvider>('SUMMARY_PROVIDER', AIProvider.GEMINI);
 
     const instance = this.providers.get(defaultProvider);
     if (!instance) {
@@ -106,10 +85,7 @@ export class AIProviderFactory {
   }
 
   getDefaultProviderName(): string {
-    const defaultProvider = this.configService.get<AIProvider>(
-      'SUMMARY_PROVIDER',
-      AIProvider.OPENAI,
-    );
+    const defaultProvider = this.configService.get<AIProvider>('SUMMARY_PROVIDER', AIProvider.GEMINI);
 
     const provider = this.providers.get(defaultProvider);
     if (provider) {

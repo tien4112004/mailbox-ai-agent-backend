@@ -27,7 +27,8 @@ import { SnoozeEmailDto } from './dto/snooze-email.dto';
 import { SummarizeEmailDto } from './dto/summarize-email.dto';
 import { CreateKanbanColumnDto } from './dto/create-kanban-column.dto';
 import { MoveCardDto } from './dto/move-card.dto';
-import { FuzzySearchEmailDto } from './dto/fuzzy-search-email.dto';
+// Note: fuzzy/semantic specific DTOs were removed. Unified search uses GET /api/emails/search?query=...
+// Search is performed via GET /api/emails/search?query=... . Options like limit/fields/threshold/enableSemantic are configured in server env.
 import { KanbanFilterSortDto } from './dto/kanban-filter-sort.dto';
 import { CreateSmtpConfigDto } from './dto/create-smtp-config.dto';
 import { UpdateSmtpConfigDto } from './dto/update-smtp-config.dto';
@@ -313,7 +314,7 @@ export class EmailsController {
   })
   @ApiResponse({
     status: 500,
-    description: 'Failed to generate summary (OpenAI API error)',
+    description: 'Failed to generate summary (AI provider error)',
   })
   async generateEmailSummary(
     @Request() req,
@@ -681,80 +682,81 @@ export class EmailsController {
     return this.kanbanService.reorderCards(req.user.id, columnId, body.cardIds);
   }
 
-  @Post('search/fuzzy')
-  @ApiOperation({ 
-    summary: 'Fuzzy search emails by subject and sender with typo tolerance',
-    description: 'Search emails using fuzzy matching with configurable similarity threshold and result limits. Supports searching across subject, sender, and body fields with automatic ranking by relevance.'
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Search results retrieved successfully',
-    schema: {
-      example: [
-        {
-          id: 'email-uuid-1',
-          gmailMessageId: 'msg-123',
-          subject: 'Meeting Tomorrow',
-          from: 'john@example.com',
-          to: 'user@example.com',
-          body: 'Let me know if you are free...',
-          similarity: 0.95,
-          matchedField: 'subject'
-        }
-      ]
-    }
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid search parameters',
-  })
-  async fuzzySearchEmails(
+  // Fuzzy-specific endpoints removed. Use unified POST /api/emails/search instead.
+
+  @Get('search')
+  @ApiOperation({ summary: 'Unified search applying fuzzy, trigram and semantic strategies' })
+  @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid search parameters' })
+  async search(
     @Request() req,
-    @Body() searchDto: FuzzySearchEmailDto,
+    @Query('query') query: string,
   ) {
-    return this.searchService.fuzzySearchEmails(req.user.id, searchDto);
+    const combined = await this.searchService.combinedSearch(req.user.id, query);
+
+    // Return only normalized email objects (no similarity/sources/metadata) as requested
+    const emails = combined.results.map((r) =>
+      this.emailsService.normalizeEmailResponse(r, true),
+    );
+
+    return emails;
   }
 
+  // Compatibility endpoint: old frontend may still call POST /api/emails/search/fuzzy
+  // This maps to the unified search logic so behavior matches the new API.
+  @Post('search/fuzzy')
+  @ApiOperation({ summary: 'Compatibility: fuzzy search (legacy) mapped to unified search' })
+  @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
+  async legacyFuzzySearch(
+    @Request() req,
+    @Body() body: { query?: string; limit?: number },
+  ) {
+    const query = body?.query?.trim();
+    if (!query) {
+      throw new Error('Query parameter "query" is required');
+    }
+
+    const combined = await this.searchService.combinedSearch(req.user.id, query, body?.limit);
+    const emails = combined.results.map((r) => this.emailsService.normalizeEmailResponse(r, true));
+    return emails;
+  }
+
+  // Compatibility: field-specific fuzzy search (legacy)
   @Post('search/fuzzy/:field')
-  @ApiOperation({ 
-    summary: 'Fuzzy search emails by a specific field',
-    description: 'Search emails in a specific field (subject, from, or body) with configurable similarity threshold and result limits.'
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Search results for the specific field',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid field or search parameters',
-  })
-  async fuzzySearchByField(
+  @ApiOperation({ summary: 'Compatibility: fuzzy search by field (legacy) mapped to field search' })
+  @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
+  async legacyFuzzySearchByField(
     @Request() req,
     @Param('field') field: string,
-    @Query('q') query: string,
-    @Query('limit') limit?: string,
-    @Query('threshold') threshold?: string,
+    @Query('q') q?: string,
+    @Body() body?: { query?: string; limit?: number; threshold?: number },
   ) {
-    if (!query) {
-      throw new Error('Query parameter "q" is required');
-    }
+    const query = (q || body?.query || '').trim();
+    if (!query) throw new Error('Query parameter "q" or body.query is required');
 
     const validFields = ['subject', 'from_email', 'body'];
     if (!validFields.includes(field)) {
       throw new Error(`Invalid field "${field}". Allowed fields: ${validFields.join(', ')}`);
     }
 
-    const parsedLimit = limit ? Math.min(parseInt(limit, 10), 100) : 20;
-    const parsedThreshold = threshold ? parseFloat(threshold) : 0.3;
+    const parsedLimit = body?.limit ? Math.min(body.limit, 100) : 20;
+    const parsedThreshold = body?.threshold ?? 0.3;
 
-    return this.searchService.fuzzySearchByField(
+    const res = await this.searchService.fuzzySearchByField(
       req.user.id,
       field as 'subject' | 'from_email' | 'body',
       query,
       parsedLimit,
       parsedThreshold,
     );
+
+    const emails = res.results.map((r) => this.emailsService.normalizeEmailResponse(r, true));
+    return emails;
   }
+
+  // Semantic-specific endpoints removed. Embedding indexing is available via internal tools or scheduled jobs.
+
+  // Field-level fuzzy endpoint also removed in favor of unified search endpoint.
 
   @Get('kanban/columns/:columnId/cards/filtered')
   @ApiOperation({

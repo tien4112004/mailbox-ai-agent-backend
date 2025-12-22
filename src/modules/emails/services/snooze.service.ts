@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual } from 'typeorm';
 import { Snooze, SnoozeStatus } from '../../../database/entities/snooze.entity';
@@ -12,6 +12,7 @@ import { addDays, addWeeks, addMonths, isPast } from 'date-fns';
 
 @Injectable()
 export class SnoozeService {
+  private readonly logger = new Logger(SnoozeService.name);
   constructor(
     @InjectRepository(Snooze)
     private snoozeRepository: Repository<Snooze>,
@@ -351,9 +352,9 @@ export class SnoozeService {
         const resumed = await this.resumeSnooze(snooze.userId, snooze.id);
         resumedSnoozes.push(resumed);
       } catch (error) {
-        console.error(
+        this.logger.error(
           `Failed to resume snooze ${snooze.id} for user ${snooze.userId}:`,
-          error,
+          error?.stack || error,
         );
       }
     }

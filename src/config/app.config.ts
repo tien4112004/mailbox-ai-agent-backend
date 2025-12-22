@@ -33,7 +33,9 @@ export default registerAs('app', () => ({
     urlReset:
       process.env.STACK_URL_RESET || 'http://localhost:4000/auth/forgot',
   },
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY || '',
+  // OpenAI config removed for embeddings; use Gemini (Google) instead
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '',
+    model: process.env.GEMINI_MODEL || 'embed-gecko',
   },
 }));
