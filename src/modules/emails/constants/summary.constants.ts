@@ -3,7 +3,6 @@
  */
 
 export enum AIProvider {
-  OPENAI = 'openai',
   GEMINI = 'gemini',
   GOOGLE = 'google', // Alias for Gemini (Google's AI provider)
 }

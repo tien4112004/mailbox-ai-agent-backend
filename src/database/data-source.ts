@@ -1,4 +1,6 @@
 import { DataSource } from 'typeorm';
+// Note: we intentionally avoid importing a custom TypeORM logger here. Query logging
+// is controlled via DB_LOG_QUERIES env var below to prevent leaking sensitive SQL/params.
 import { config } from 'dotenv';
 import { join } from 'path';
 
@@ -34,7 +36,10 @@ dbConfig.entities = [
 dbConfig.migrations = [join(__dirname, 'migrations', '*.{ts,js}')];
 dbConfig.migrationsTableName = 'migrations';
 dbConfig.synchronize = false;
-dbConfig.logging = process.env.NODE_ENV === 'development';
+// Control DB logging carefully to avoid leaking sensitive query text (e.g. user search terms)
+// By default we disable query logging completely. Set DB_LOG_QUERIES=true to enable it (for debugging).
+const dbLogQueries = process.env.DB_LOG_QUERIES === 'true';
+dbConfig.logging = dbLogQueries ? ['query', 'error', 'warn'] : false;
 dbConfig.extra = {
   max: Number(process.env.DATABASE_MAX_CONNECTIONS) || 10,
   ssl: process.env.DATABASE_SSL_ENABLED === 'true' || dbUrl?.includes('sslmode') ? {
@@ -44,5 +49,7 @@ dbConfig.extra = {
     cert: process.env.DATABASE_CERT,
   } : false,
 };
+
+// No custom logger - keep logging minimal and controlled via DB_LOG_QUERIES env var
 
 export default new DataSource(dbConfig);
