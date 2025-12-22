@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { AIProvider, SummaryLength, SummaryTone } from '../constants/summary.constants';
+import { IsOptional, IsString, IsEnum } from 'class-validator';
+import { SummaryLength, SummaryTone } from '../constants/summary.constants';
 
-export { SummaryLength, SummaryTone, AIProvider };
+export { SummaryLength, SummaryTone };
 
 export class SummarizeEmailDto {
   @ApiProperty({
@@ -32,12 +32,5 @@ export class SummarizeEmailDto {
   @IsOptional()
   customInstructions?: string;
 
-  @ApiProperty({
-    enum: AIProvider,
-    description: 'Optional specific AI provider to use (overrides default)',
-    required: false,
-  })
-  @IsEnum(AIProvider)
-  @IsOptional()
-  provider?: AIProvider;
+  // provider field removed — only Gemini is supported
 }
