@@ -1,14 +1,16 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Like, ILike, Not, IsNull } from 'typeorm';
 import { GetEmailsDto } from '../dto/get-emails.dto';
 import { SendEmailDto } from '../dto/send-email.dto';
 import { ReplyEmailDto } from '../dto/reply-email.dto';
 import { ModifyEmailDto } from '../dto/modify-email.dto';
+import { AdvancedSearchDto, SuggestionQueryDto } from '../dto/advanced-search.dto';
 import { Email } from '../../../database/entities/email.entity';
 import { GmailService } from './gmail.service';
 import { EmailProviderFactory } from '../providers/email-provider.factory';
 import { AuthService } from '../../auth/auth.service';
+import { SearchQueryParser, SearchCriteria } from './search-query-parser.service';
 
 // In-memory cache for page tokens (key: userId-folder-limit, value: page -> token map)
 const pageTokenCache = new Map<string, Map<number, string>>();
@@ -23,6 +25,7 @@ export class EmailsService {
     private gmailService: GmailService,
     private authService: AuthService,
     private emailProviderFactory: EmailProviderFactory,
+    private searchQueryParser: SearchQueryParser,
   ) { }
 
   /**
@@ -460,6 +463,200 @@ export class EmailsService {
       tone: dto.tone,
       provider: dto.provider,
     };
+  }
+
+  /**
+   * Advanced search with parsed criteria
+   */
+  async advancedSearch(userId: string, dto: AdvancedSearchDto) {
+    const criteria = this.searchQueryParser.parse(dto.query);
+    const { page = 1, limit = 20, folder } = dto;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.emailRepository
+      .createQueryBuilder('email')
+      .where('email.userId = :userId', { userId });
+
+    // Apply folder filter
+    if (folder || criteria.folder) {
+      queryBuilder.andWhere('UPPER(email.folder) = UPPER(:folder)', { 
+        folder: criteria.folder || folder 
+      });
+    }
+
+    // Apply from filter
+    if (criteria.from?.length > 0) {
+      const fromConditions = criteria.from.map((email, idx) => 
+        `email.fromEmail ILIKE :from${idx}`
+      ).join(' OR ');
+      queryBuilder.andWhere(`(${fromConditions})`, 
+        Object.fromEntries(criteria.from.map((email, idx) => [`from${idx}`, `%${email}%`]))
+      );
+    }
+
+    // Apply to filter
+    if (criteria.to?.length > 0) {
+      const toConditions = criteria.to.map((email, idx) => 
+        `email.toEmail::text ILIKE :to${idx}`
+      ).join(' OR ');
+      queryBuilder.andWhere(`(${toConditions})`, 
+        Object.fromEntries(criteria.to.map((email, idx) => [`to${idx}`, `%${email}%`]))
+      );
+    }
+
+    // Apply subject filter
+    if (criteria.subject?.length > 0) {
+      const subjectConditions = criteria.subject.map((text, idx) => 
+        `email.subject ILIKE :subject${idx}`
+      ).join(' AND ');
+      queryBuilder.andWhere(`(${subjectConditions})`, 
+        Object.fromEntries(criteria.subject.map((text, idx) => [`subject${idx}`, `%${text}%`]))
+      );
+    }
+
+    // Apply contains filter (search in body and subject)
+    if (criteria.contains?.length > 0) {
+      const containsConditions = criteria.contains.map((text, idx) => 
+        `(email.subject ILIKE :contains${idx} OR email.body ILIKE :contains${idx})`
+      ).join(' AND ');
+      queryBuilder.andWhere(`(${containsConditions})`, 
+        Object.fromEntries(criteria.contains.map((text, idx) => [`contains${idx}`, `%${text}%`]))
+      );
+    }
+
+    // Apply general search
+    if (criteria.generalSearch) {
+      queryBuilder.andWhere(
+        '(email.subject ILIKE :search OR email.body ILIKE :search OR email.fromEmail ILIKE :search OR email.fromName ILIKE :search)',
+        { search: `%${criteria.generalSearch}%` }
+      );
+    }
+
+    // Apply has:attachment filter
+    if (criteria.hasAttachment !== undefined) {
+      if (criteria.hasAttachment) {
+        queryBuilder.andWhere('email.attachments IS NOT NULL');
+        queryBuilder.andWhere("jsonb_array_length(email.attachments) > 0");
+      } else {
+        queryBuilder.andWhere(
+          '(email.attachments IS NULL OR jsonb_array_length(email.attachments) = 0)'
+        );
+      }
+    }
+
+    // Apply is:read/unread filter
+    if (criteria.isRead !== undefined) {
+      queryBuilder.andWhere('email.read = :read', { read: criteria.isRead });
+    }
+
+    // Apply is:starred filter
+    if (criteria.isStarred !== undefined) {
+      queryBuilder.andWhere('email.starred = :starred', { starred: criteria.isStarred });
+    }
+
+    // Get total count and paginated results
+    const [emails, total] = await queryBuilder
+      .orderBy('email.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      emails,
+      criteria,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Get sender email suggestions for autocompletion
+   */
+  async getSenderSuggestions(userId: string, dto: SuggestionQueryDto) {
+    const { query, limit = 10 } = dto;
+
+    const senders = await this.emailRepository
+      .createQueryBuilder('email')
+      .select('email.from_email', 'email')
+      .addSelect('email.from_name', 'name')
+      .addSelect('COUNT(*)', 'count')
+      .where('email.user_id = :userId', { userId })
+      .andWhere('(email.from_email ILIKE :query OR email.from_name ILIKE :query)', { 
+        query: `%${query}%` 
+      })
+      .groupBy('email.from_email')
+      .addGroupBy('email.from_name')
+      .orderBy('count', 'DESC')
+      .limit(limit)
+      .getRawMany();
+
+    return senders.map(s => ({
+      email: s.email,
+      name: s.name,
+      displayText: s.name ? `${s.name} <${s.email}>` : s.email,
+    }));
+  }
+
+  /**
+   * Get recipient email suggestions for autocompletion
+   */
+  async getRecipientSuggestions(userId: string, dto: SuggestionQueryDto) {
+    const { query, limit = 10 } = dto;
+
+    // This is more complex because toEmail is an array
+    const emails = await this.emailRepository
+      .createQueryBuilder('email')
+      .select('email.toEmail')
+      .where('email.userId = :userId', { userId })
+      .andWhere('email.to_email::text ILIKE :query', { query: `%${query}%` })
+      .limit(100) // Get more to filter
+      .getMany();
+
+    // Flatten and deduplicate
+    const recipientMap = new Map<string, number>();
+    emails.forEach(email => {
+      email.toEmail.forEach(recipient => {
+        if (recipient.toLowerCase().includes(query.toLowerCase())) {
+          recipientMap.set(recipient, (recipientMap.get(recipient) || 0) + 1);
+        }
+      });
+    });
+
+    // Sort by frequency and take top results
+    return Array.from(recipientMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([email]) => ({
+        email,
+        displayText: email,
+      }));
+  }
+
+  /**
+   * Get subject suggestions for autocompletion
+   */
+  async getSubjectSuggestions(userId: string, dto: SuggestionQueryDto) {
+    const { query, limit = 10 } = dto;
+
+    const subjects = await this.emailRepository
+      .createQueryBuilder('email')
+      .select('email.subject', 'subject')
+      .addSelect('COUNT(*)', 'count')
+      .where('email.user_id = :userId', { userId })
+      .andWhere('email.subject ILIKE :query', { query: `%${query}%` })
+      .groupBy('email.subject')
+      .orderBy('count', 'DESC')
+      .limit(limit)
+      .getRawMany();
+
+    return subjects.map(s => ({
+      subject: s.subject,
+      displayText: s.subject,
+    }));
   }
 }
 
