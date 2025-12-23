@@ -28,6 +28,7 @@ import { SummarizeEmailDto } from './dto/summarize-email.dto';
 import { CreateKanbanColumnDto } from './dto/create-kanban-column.dto';
 import { MoveCardDto } from './dto/move-card.dto';
 import { FuzzySearchEmailDto } from './dto/fuzzy-search-email.dto';
+import { AdvancedSearchDto, SuggestionQueryDto } from './dto/advanced-search.dto';
 import { KanbanFilterSortDto } from './dto/kanban-filter-sort.dto';
 import { CreateSmtpConfigDto } from './dto/create-smtp-config.dto';
 import { UpdateSmtpConfigDto } from './dto/update-smtp-config.dto';
@@ -755,6 +756,119 @@ export class EmailsController {
       parsedThreshold,
     );
   }
+
+  // ==================== ADVANCED SEARCH ENDPOINTS ====================
+
+  @Post('search/advanced')
+  @ApiOperation({ 
+    summary: 'Advanced search with criteria parsing',
+    description: 'Search emails using criteria like from:, to:, subject:, contains:, has:attachment, is:read, is:starred, folder:'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Search results with parsed criteria',
+    schema: {
+      example: {
+        emails: [
+          {
+            id: 'uuid-123',
+            subject: 'Meeting Tomorrow',
+            from: { name: 'John Doe', email: 'john@example.com' },
+            to: ['you@example.com'],
+            date: '2025-12-23T10:30:00.000Z',
+            snippet: 'Hi, let\'s meet tomorrow...',
+            read: false,
+            starred: true
+          }
+        ],
+        criteria: {
+          from: ['john@example.com'],
+          subject: ['meeting'],
+          isStarred: true
+        },
+        pagination: {
+          total: 15,
+          page: 1,
+          limit: 20,
+          totalPages: 1
+        }
+      }
+    }
+  })
+  async advancedSearch(
+    @Request() req,
+    @Body() dto: AdvancedSearchDto,
+  ) {
+    return this.emailsService.advancedSearch(req.user.id, dto);
+  }
+
+  @Get('suggestions/senders')
+  @ApiOperation({ 
+    summary: 'Get sender email suggestions for autocomplete',
+    description: 'Returns frequently used sender emails matching the query'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of sender suggestions',
+    schema: {
+      example: [
+        { email: 'john@example.com', name: 'John Doe', displayText: 'John Doe <john@example.com>' },
+        { email: 'jane@example.com', name: 'Jane Smith', displayText: 'Jane Smith <jane@example.com>' }
+      ]
+    }
+  })
+  async getSenderSuggestions(
+    @Request() req,
+    @Query() dto: SuggestionQueryDto,
+  ) {
+    return this.emailsService.getSenderSuggestions(req.user.id, dto);
+  }
+
+  @Get('suggestions/recipients')
+  @ApiOperation({ 
+    summary: 'Get recipient email suggestions for autocomplete',
+    description: 'Returns frequently used recipient emails matching the query'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of recipient suggestions',
+    schema: {
+      example: [
+        { email: 'team@example.com', displayText: 'team@example.com' },
+        { email: 'support@example.com', displayText: 'support@example.com' }
+      ]
+    }
+  })
+  async getRecipientSuggestions(
+    @Request() req,
+    @Query() dto: SuggestionQueryDto,
+  ) {
+    return this.emailsService.getRecipientSuggestions(req.user.id, dto);
+  }
+
+  @Get('suggestions/subjects')
+  @ApiOperation({ 
+    summary: 'Get subject suggestions for autocomplete',
+    description: 'Returns frequently used subjects matching the query'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of subject suggestions',
+    schema: {
+      example: [
+        { subject: 'Weekly Meeting', displayText: 'Weekly Meeting' },
+        { subject: 'Project Update', displayText: 'Project Update' }
+      ]
+    }
+  })
+  async getSubjectSuggestions(
+    @Request() req,
+    @Query() dto: SuggestionQueryDto,
+  ) {
+    return this.emailsService.getSubjectSuggestions(req.user.id, dto);
+  }
+
+  // ==================== KANBAN ENDPOINTS ====================
 
   @Get('kanban/columns/:columnId/cards/filtered')
   @ApiOperation({

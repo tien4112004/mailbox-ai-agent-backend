@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { EmailsController } from './emails.controller';
 import { EmailsService, SnoozeService, SummaryService, GmailService, KanbanService, KanbanFilterSortService, EmailSearchService } from './services';
+import { SearchQueryParser } from './services/search-query-parser.service';
 import { ImapService } from './imap.service';
 import { SmtpService } from './smtp.service';
 import { SmtpConfigService } from './smtp-config.service';
@@ -34,6 +35,7 @@ import { User } from '../../database/entities/user.entity';
     KanbanService,
     KanbanFilterSortService,
     EmailSearchService,
+    SearchQueryParser,
     EmailProviderFactory,
     AIProviderFactory,
   ],
