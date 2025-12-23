@@ -44,8 +44,7 @@ export class EmailProviderFactory {
           starred: email.isStarred !== undefined ? email.isStarred : email.labelIds?.includes('STARRED') || false,
           folder: email.folder || 'INBOX',
           attachments: email.attachments || null,
-          threadId: email.threadId || null,
-          messageId: email.messageId || email.threadId || null,
+          messageId: email.messageId || null,
           userId,
           createdAt: new Date(email.date),
         });
@@ -87,10 +86,9 @@ export class EmailProviderFactory {
         }),
       );
 
-      const newCount = savedEmails.filter((e, idx) => {
-        // Check if email is newly saved (not existing)
-        const email = emailsToSave[idx];
-        return e.id !== undefined;
+      const newCount = savedEmails.filter((e) => {
+        // Email entities always have id after being saved
+        return e && typeof e === 'object' && 'id' in e;
       }).length;
       
       logger.log(`Persisted ${newCount} new SMTP emails for user ${userId}, total returned: ${savedEmails.length}`);

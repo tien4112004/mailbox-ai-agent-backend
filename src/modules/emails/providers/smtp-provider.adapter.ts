@@ -124,7 +124,6 @@ export class SmtpProviderAdapter implements EmailProvider {
       starred: email.starred,
       folder: email.folder,
       attachments: email.attachments || [],
-      threadId: email.threadId,
     };
   }
 
@@ -157,7 +156,6 @@ export class SmtpProviderAdapter implements EmailProvider {
       starred: email.starred,
       folder: email.folder,
       attachments: email.attachments || [],
-      threadId: email.threadId,
     };
   }
 
