@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Email Summarization API generates concise AI-powered summaries of emails using OpenAI GPT or Google Gemini APIs. It supports multiple summary lengths, tones, and AI providers.
+The Email Summarization API generates concise AI-powered summaries of emails using Google Gemini. It supports multiple summary lengths and tones.
 
 ## Base URL
 
@@ -40,7 +40,6 @@ Generate an AI-powered summary for a specific email.
 {
   "length": "medium",
   "tone": "formal",
-  "provider": "openai",
   "customInstructions": "Focus on action items and deadlines"
 }
 ```
@@ -51,7 +50,6 @@ Generate an AI-powered summary for a specific email.
 |-------|------|---------|---------|-------------|
 | length | string | short, medium, long | medium | Summary length |
 | tone | string | formal, casual, technical | formal | Summary tone/style |
-| provider | string | openai, gemini | (default) | AI provider override |
 | customInstructions | string | Any text | null | Additional instructions for AI |
 
 **Available Summary Lengths:**
@@ -75,7 +73,7 @@ curl -X POST \
   -d '{
     "length": "medium",
     "tone": "formal",
-    "provider": "openai"
+    "provider": "gemini"
   }' \
   http://localhost:3000/api/emails/email-uuid-001/summary
 ```
@@ -89,8 +87,8 @@ curl -X POST \
   "summary": "The finance team is requesting the final budget proposals for Q1 2026. All departments need to submit their allocations by December 20th. The review meeting is scheduled for January 5th, 2026.",
   "length": "medium",
   "tone": "formal",
-  "provider": "openai",
-  "model": "gpt-3.5-turbo",
+  "provider": "gemini",
+  "model": "gemini-2.5-flash",
   "generatedAt": "2025-12-10T11:15:00Z"
 }
 ```
@@ -110,7 +108,7 @@ curl -X POST \
 ```json
 {
   "statusCode": 500,
-  "message": "Failed to generate summary: OpenAI API error",
+  "message": "Failed to generate summary: AI provider error",
   "error": "Internal Server Error"
 }
 ```
@@ -137,7 +135,7 @@ Fetch Email Content
     ↓
 Prepare Prompt with Options
     ↓
-Call AI Provider (OpenAI/Gemini)
+Call AI Provider (Gemini)
     ↓
 Parse Response
     ↓
@@ -147,21 +145,6 @@ Return Summary
 ---
 
 ## AI Provider Configuration
-
-### OpenAI Configuration
-
-**Required Environment Variables:**
-
-```bash
-OPENAI_API_KEY=sk-your-api-key
-OPENAI_MODEL=gpt-3.5-turbo  # or gpt-4, gpt-4-turbo-preview
-```
-
-**Supported Models:**
-
-- gpt-3.5-turbo (faster, cheaper)
-- gpt-4 (more powerful)
-- gpt-4-turbo-preview (latest)
 
 ### Google Gemini Configuration
 
@@ -173,8 +156,8 @@ GEMINI_API_KEY=your-gemini-api-key
 
 **Supported Models:**
 
-- gemini-pro
-- gemini-pro-vision
+- gemini-2.5-flash
+- gemini-3-pro
 
 ---
 
@@ -202,7 +185,8 @@ curl -X POST \
   "summary": "The project deadline has been extended by two weeks due to resource constraints.",
   "length": "short",
   "tone": "formal",
-  "provider": "openai",
+  "provider": "gemini",
+  "provider": "gemini",
   "generatedAt": "2025-12-10T11:20:00Z"
 }
 ```
@@ -232,7 +216,8 @@ curl -X POST \
   "summary": "Management has announced a team restructuring effective January 15th. The sales department will be merged with business development under a new VP of Revenue. Key stakeholders include current department heads and affected employees. Action items: All staff must complete reorganization training by January 10th. Deadline: New role assignments will be finalized by January 12th. HR will schedule one-on-one meetings with affected employees.",
   "length": "long",
   "tone": "formal",
-  "provider": "openai",
+  "provider": "gemini",
+  "provider": "gemini",
   "generatedAt": "2025-12-10T11:25:00Z"
 }
 ```
@@ -261,7 +246,8 @@ curl -X POST \
   "summary": "Hey team! Our monthly team lunch is coming up next Friday at noon. It's at that Italian place everyone loves downtown. Just let Sarah know if you're coming or have any dietary restrictions!",
   "length": "medium",
   "tone": "casual",
-  "provider": "openai",
+  "provider": "gemini",
+  "provider": "gemini",
   "generatedAt": "2025-12-10T11:30:00Z"
 }
 ```
@@ -291,7 +277,8 @@ curl -X POST \
   "summary": "The legacy monolithic API will be migrated to a microservices architecture using Docker and Kubernetes. Key services include authentication (Node.js), billing (Python/FastAPI), and notifications (Go). Database migration from PostgreSQL single instance to distributed setup with read replicas. Dependencies: Kong API Gateway for routing, Redis for caching. Timeline: POC in January, gradual rollout throughout Q1 2026.",
   "length": "medium",
   "tone": "technical",
-  "provider": "openai",
+  "provider": "gemini",
+  "provider": "gemini",
   "generatedAt": "2025-12-10T11:35:00Z"
 }
 ```
@@ -348,11 +335,11 @@ curl -X POST \
 ### Example 3: Batch Summarization with Different Providers
 
 ```bash
-# Using OpenAI (default)
+# Using Gemini (default)
 curl -X POST \
   -H "Authorization: Bearer TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"length":"medium","provider":"openai"}' \
+  -d '{"length":"medium","provider":"gemini"}' \
   http://localhost:3000/api/emails/email-123/summary
 
 # Using Gemini (alternative)
@@ -370,14 +357,14 @@ curl -X POST \
 1. **Batch Operations**: Summarize emails in batches to optimize API usage
 2. **Caching**: Cache summaries to avoid regenerating for the same email with same parameters
 3. **Rate Limits**:
-   - OpenAI: Subject to your API usage limits (typically 3,000 requests/minute for standard accounts)
+  - Gemini: Subject to your API usage and quota limits (see Google AI Studio for details)
    - Gemini: Subject to your API quota
 4. **Timeout**: Summary generation may take 2-5 seconds depending on email length and AI provider
 5. **Cost Optimization**:
    - Use "short" length for quick previews
    - Use "medium" length for most use cases
    - Use "long" length for detailed analysis only when needed
-   - Consider using cheaper models (gpt-3.5-turbo) for routine summaries
+  - Consider using smaller/cheaper Gemini models for routine summaries
 
 ---
 
@@ -444,7 +431,7 @@ curl -X POST \
 ```bash
 curl -X POST \
   -H "Authorization: Bearer TOKEN" \
-  -d '{"length":"medium","provider":"openai"}' \
+  -d '{"length":"medium","provider":"gemini"}' \
   http://localhost:3000/api/emails/email-with-large-body/summary
 ```
 
@@ -484,7 +471,7 @@ curl -X POST \
 
 1. **Parallel Requests**: Make multiple summary requests in parallel for different emails
 2. **Length Strategy**: Start with "short" summaries for initial processing, expand to "medium"/"long" as needed
-3. **Provider Selection**: Test both OpenAI and Gemini to find the best balance for your use case
+3. **Provider Selection**: Gemini is the supported provider in this project. Use Gemini models to balance cost and quality.
 4. **Caching Implementation**: Implement client-side caching to avoid re-summarizing the same email
 
 ---

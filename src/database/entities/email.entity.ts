@@ -54,6 +54,9 @@ export class Email {
     type: string;
   }> | null;
 
+  @Column('vector', { nullable: true })
+  embedding: number[] | null;
+
   @Column({ name: 'user_id' })
   userId: string;
 

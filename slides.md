@@ -46,7 +46,7 @@ style: |
 
 # The Current State of AI Coding
 
-- **Chat-based (ChatGPT, Claude):**
+- **Chat-based (conversational assistants):**
   - Conversational, good for exploration.
   - "Copy-paste" workflow.
 - **Autocomplete (Copilot, Codeium):**

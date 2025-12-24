@@ -33,6 +33,7 @@ export class EmailProviderFactory {
     const logger = new Logger(EmailProviderFactory.name);
     try {
       const emailsToSave = emails.map((email) => {
+        // cast to any to satisfy TypeORM DeepPartial typing and allow input variations
         return this.emailRepository.create({
           subject: email.subject || '',
           body: email.body || '',
@@ -44,25 +45,25 @@ export class EmailProviderFactory {
           starred: email.isStarred !== undefined ? email.isStarred : email.labelIds?.includes('STARRED') || false,
           folder: email.folder || 'INBOX',
           attachments: email.attachments || null,
-          messageId: email.messageId || null,
+          messageId: email.messageId || email.threadId || null,
           userId,
           createdAt: new Date(email.date),
-        });
+        } as any);
       });
 
-      const savedEmails = await Promise.all(
-        emailsToSave.map(async (email) => {
+      const savedEmails: any[] = await Promise.all(
+        emailsToSave.map(async (emailToSave: any) => {
           // Check if email already exists using messageId (unique identifier)
-          if (email.messageId) {
+          if (emailToSave.messageId) {
             const existing = await this.emailRepository.findOne({
               where: {
                 userId,
-                messageId: email.messageId,
+                messageId: emailToSave.messageId,
               },
             });
 
             if (existing) {
-              logger.debug(`Email already exists (messageId: ${email.messageId}), returning existing: ${email.subject}`);
+              logger.debug(`Email already exists (messageId: ${emailToSave.messageId}), returning existing: ${emailToSave.subject}`);
               return existing;
             }
           }
@@ -71,18 +72,18 @@ export class EmailProviderFactory {
           const existing = await this.emailRepository.findOne({
             where: {
               userId,
-              fromEmail: email.fromEmail,
-              subject: email.subject,
-              createdAt: email.createdAt,
+              fromEmail: emailToSave.fromEmail,
+              subject: emailToSave.subject,
+              createdAt: emailToSave.createdAt,
             },
           });
 
           if (existing) {
-            logger.debug(`Email already exists (fallback match), returning existing: ${email.subject}`);
+            logger.debug(`Email already exists (fallback match), returning existing: ${emailToSave.subject}`);
             return existing;
           }
 
-          return this.emailRepository.save(email);
+          return this.emailRepository.save(emailToSave);
         }),
       );
 

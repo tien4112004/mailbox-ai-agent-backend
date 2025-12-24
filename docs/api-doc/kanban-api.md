@@ -195,6 +195,7 @@ Create a new custom Kanban column.
 | status | string | No | Custom status identifier |
 | color | string | No | Hex color code for visual representation |
 | isActive | boolean | No | Column visibility status (default: true) |
+| labelId | string | No | Optional Gmail label ID to map this column to (e.g., STARRED). When set, moving cards into this column will apply the label in the user's Gmail account. |
 
 **Response (201 Created):**
 
@@ -205,6 +206,7 @@ Create a new custom Kanban column.
   "order": 5,
   "status": "urgent",
   "color": "#EF4444",
+  "labelId": "STARRED",
   "isActive": true,
   "userId": "user-uuid",
   "createdAt": "2025-12-10T10:15:00Z",
@@ -243,6 +245,7 @@ Update an existing Kanban column.
 {
   "name": "High Priority",
   "color": "#DC2626",
+  "labelId": "LABEL_12345",
   "isActive": true
 }
 ```
@@ -256,6 +259,7 @@ Update an existing Kanban column.
   "order": 5,
   "status": "urgent",
   "color": "#DC2626",
+  "labelId": "LABEL_12345",
   "isActive": true,
   "userId": "user-uuid",
   "createdAt": "2025-12-10T10:15:00Z",
@@ -272,6 +276,11 @@ Update an existing Kanban column.
   "message": "Kanban column not found",
   "error": "Not Found"
 }
+
+**Important behaviour:**
+- The **Inbox** column (status = "inbox") is immutable and cannot be renamed or deleted (will return 400).
+- If a column is renamed, all cards currently in that column are moved to the user's Inbox column. This avoids orphaned cards when the frontend layout changes.
+- If the column has a `labelId` set (Gmail label mapping), moving/adding cards to that column will attempt to apply/remove labels in the user's Gmail account. Gmail label operations are performed by the server and failures are logged but do not block column operations.
 ```
 
 ---
@@ -295,6 +304,10 @@ Delete a Kanban column (cascades to remove all cards).
   "success": true,
   "message": "Column deleted successfully"
 }
+
+**Important behaviour:**
+- The **Inbox** column cannot be deleted (400).
+- Before deletion, all cards in the column are moved to the user's Inbox column and Gmail labels are updated where applicable (errors are logged but do not block deletion).
 ```
 
 **Error Responses:**
@@ -441,6 +454,9 @@ curl -X POST \
   "message": "Email not found",
   "error": "Not Found"
 }
+
+**Label mapping notes:**
+- Columns can store a `labelId` mapping to a Gmail label. When a card is moved or added to a column with `labelId`, the server will call the Gmail API to add that label to the message and remove the previous column's label (if defined). If the destination column is non-inbox, the `INBOX` label will be removed; moving to Inbox will add `INBOX` label.
 ```
 
 ---
@@ -481,6 +497,7 @@ Add an email to a specific column as a new card.
   "emailId": "email-uuid-001",
   "columnId": "col-todo-uuid",
   "order": 1,
+  "labelApplied": "STARRED",
   "notes": null,
   "createdAt": "2025-12-10T10:50:00Z",
   "updatedAt": "2025-12-10T10:50:00Z"
@@ -508,6 +525,18 @@ Remove a card from the Kanban board.
   "success": true,
   "message": "Card removed successfully"
 }
+
+---
+
+## Migration note
+
+Add a database migration to include the new `label_id` column in `kanban_columns` (nullable). Example SQL:
+
+```sql
+ALTER TABLE kanban_columns ADD COLUMN label_id varchar NULL;
+```
+
+Optionally add an index if you plan to query by label mapping for a user.
 ```
 
 ---

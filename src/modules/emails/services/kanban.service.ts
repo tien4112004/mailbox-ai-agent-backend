@@ -6,6 +6,8 @@ import { KanbanCard } from '../../../database/entities/kanban-card.entity';
 import { Email } from '../../../database/entities/email.entity';
 import { CreateKanbanColumnDto } from '../dto/create-kanban-column.dto';
 import { MoveCardDto } from '../dto/move-card.dto';
+import { GmailService } from './gmail.service';
+import { AuthService } from '../../auth/auth.service';
 
 @Injectable()
 export class KanbanService {
@@ -18,6 +20,8 @@ export class KanbanService {
     private kanbanCardRepository: Repository<KanbanCard>,
     @InjectRepository(Email)
     private emailRepository: Repository<Email>,
+    private gmailService: GmailService, // Inject GmailService
+    private authService: AuthService,   // Inject AuthService
   ) {}
 
   /**
@@ -82,6 +86,7 @@ export class KanbanService {
     return columns.map((col) => ({
       id: col.id,
       name: col.name,
+      labelId: col.labelId,
       order: col.order,
       status: col.status,
       color: col.color,
@@ -316,6 +321,16 @@ export class KanbanService {
       throw new NotFoundException('Kanban column not found');
     }
 
+    // Inbox column is immutable
+    if (column.status === 'inbox') {
+      throw new BadRequestException('Inbox column cannot be modified');
+    }
+
+    // If column is renamed, move all cards to inbox as per requirements
+    if (updateData.name && updateData.name !== column.name) {
+      await this.moveAllCardsToInbox(userId, columnId);
+    }
+
     Object.assign(column, updateData);
     return this.kanbanColumnRepository.save(column);
   }
@@ -331,6 +346,14 @@ export class KanbanService {
     if (!column) {
       throw new NotFoundException('Kanban column not found');
     }
+
+    // Prevent deleting inbox
+    if (column.status === 'inbox') {
+      throw new BadRequestException('Inbox column cannot be deleted');
+    }
+
+    // Move cards to inbox before deleting
+    await this.moveAllCardsToInbox(userId, columnId);
 
     await this.kanbanColumnRepository.remove(column);
   }
@@ -373,9 +396,94 @@ export class KanbanService {
       order: order || 0,
     });
 
-    return this.kanbanCardRepository.save(card);
+    const saved = await this.kanbanCardRepository.save(card);
+
+    // Apply label changes in Gmail if necessary (don't block operation on failure)
+    try {
+      const emailEntity = await this.emailRepository.findOne({ where: { id: emailId } });
+      await this.applyLabelOnMove(userId, emailEntity, fromColumn, toColumn);
+    } catch (err) {
+      this.logger.error('Failed to apply label changes on move:', err?.message || err);
+    }
+
+    return saved;
   }
 
+  /**
+   * Move all cards from a source column to the user's Inbox column
+   */
+  private async moveAllCardsToInbox(userId: string, sourceColumnId: string): Promise<void> {
+    // Ensure inbox column exists
+    let inboxColumn = await this.kanbanColumnRepository.findOne({ where: { userId, status: 'inbox' } });
+    if (!inboxColumn) {
+      const cols = await this.kanbanColumnRepository.find({ where: { userId } });
+      if (cols.length === 0) {
+        await this.initializeKanbanBoard(userId);
+      }
+      inboxColumn = await this.kanbanColumnRepository.findOne({ where: { userId, status: 'inbox' } });
+      if (!inboxColumn) throw new Error('Inbox column not found');
+    }
+
+    const cards = await this.kanbanCardRepository.find({ where: { columnId: sourceColumnId } });
+    if (cards.length === 0) return;
+
+    for (const card of cards) {
+      // Remove existing cards for that email to enforce single-column rule
+      await this.kanbanCardRepository.delete({ emailId: card.emailId });
+
+      // Create card in inbox
+      const newCard = this.kanbanCardRepository.create({ emailId: card.emailId, columnId: inboxColumn.id, order: 0 });
+      await this.kanbanCardRepository.save(newCard);
+
+      // Update Gmail labels: remove source column label and add INBOX
+      try {
+        const emailEntity = await this.emailRepository.findOne({ where: { id: card.emailId } });
+        const sourceColumn = await this.kanbanColumnRepository.findOne({ where: { id: sourceColumnId } });
+        await this.applyLabelOnMove(userId, emailEntity, sourceColumn, inboxColumn);
+      } catch (err) {
+        this.logger.error('Failed to update labels while moving cards to inbox:', err?.message || err);
+      }
+    }
+  }
+
+  private isDbEmail(messageId: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(messageId);
+  }
+
+  private async applyLabelOnMove(userId: string, emailEntity: Email, fromColumn: KanbanColumn | null, toColumn: KanbanColumn | null) {
+    if (!emailEntity || !emailEntity.messageId) return;
+
+    // Only apply labels for Gmail messages (non-DB IDs)
+    if (this.isDbEmail(emailEntity.messageId)) return;
+
+    const tokens = await this.authService.getGmailTokens(userId);
+
+    const addLabelIds: string[] = [];
+    const removeLabelIds: string[] = [];
+
+    if (fromColumn) {
+      if (fromColumn.labelId) removeLabelIds.push(fromColumn.labelId);
+      if (fromColumn.status === 'inbox') removeLabelIds.push('INBOX');
+    }
+
+    if (toColumn) {
+      if (toColumn.labelId) addLabelIds.push(toColumn.labelId);
+      if (toColumn.status === 'inbox') addLabelIds.push('INBOX');
+    }
+
+    // If moving to a non-inbox column, ensure INBOX is removed
+    if (toColumn && toColumn.status !== 'inbox') {
+      removeLabelIds.push('INBOX');
+    }
+
+    // Call Gmail modify; catch errors but don't fail operation
+    try {
+      await this.gmailService.modifyEmail(tokens.accessToken, tokens.refreshToken, emailEntity.messageId, addLabelIds.length ? addLabelIds : undefined, removeLabelIds.length ? removeLabelIds : undefined);
+    } catch (err) {
+      this.logger.error('Error modifying Gmail labels:', err?.message || err);
+    }
+  }
   /**
    * Add an email to a specific Kanban column
    */

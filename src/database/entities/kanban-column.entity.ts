@@ -29,6 +29,9 @@ export class KanbanColumn {
   @Column({ nullable: true })
   color: string;
 
+  @Column({ name: 'label_id', nullable: true })
+  labelId?: string;
+
   @Column({ type: 'varchar', default: 'inbox' })
   status: string;
 
