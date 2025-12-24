@@ -52,6 +52,69 @@ export class GeminiClient {
     }
   }
 
+  async embedMany(texts: string[]): Promise<number[][]> {
+    if (!Array.isArray(texts) || texts.length === 0) return [];
+    try {
+      let response: any;
+      if (this.ai?.gemini?.embedContent) {
+        response = await this.ai.gemini.embedContent({ model: this.model, contents: texts });
+      } else if (this.ai?.models?.embedContent) {
+        response = await this.ai.models.embedContent({ model: this.model, contents: texts });
+      } else if (typeof this.ai?.embedContent === 'function') {
+        response = await this.ai.embedContent({ model: this.model, contents: texts });
+      } else {
+        throw new Error('Gemini SDK does not expose embedContent method');
+      }
+
+      // Parse embeddings from response - expect an array of embeddings
+      const embeddings: number[][] = [];
+
+      // Try known shapes
+      if (response?.embeddings && Array.isArray(response.embeddings)) {
+        for (const e of response.embeddings) {
+          const emb = e?.embedding || e?.vector || null;
+          if (Array.isArray(emb)) embeddings.push(emb as number[]);
+        }
+        if (embeddings.length) return embeddings;
+      }
+
+      if (response?.data && Array.isArray(response.data)) {
+        for (const d of response.data) {
+          const emb = d?.embedding || d?.outputs?.[0]?.embedding || null;
+          if (Array.isArray(emb)) embeddings.push(emb as number[]);
+        }
+        if (embeddings.length) return embeddings;
+      }
+
+      // Fallback: scan any nested arrays for numeric arrays matching number[] length
+      const foundAll: number[][] = [];
+      const visit = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return null;
+        if (Array.isArray(obj) && obj.length > 0 && typeof obj[0] === 'number') return obj as number[];
+        for (const k of Object.keys(obj)) {
+          const v = obj[k];
+          const r = visit(v);
+          if (r) return r;
+        }
+        return null;
+      };
+
+      // Try to extract up to texts.length embeddings scanning response
+      const flat = JSON.stringify(response);
+      // worst-case, fallback to per-item embed by calling embed for each text
+      this.logger.debug('Falling back to per-item embedding for embedMany');
+      const results: number[][] = [];
+      for (const t of texts) {
+        const emb = await this.embed(t);
+        results.push(emb);
+      }
+      return results;
+    } catch (err) {
+      this.logger.error('Gemini embedMany error', err as any);
+      throw err;
+    }
+  }
+
   async checkModelAvailability(): Promise<boolean> {
     try {
       // Try a very short embed to validate access and model
