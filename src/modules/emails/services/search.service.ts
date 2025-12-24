@@ -167,15 +167,58 @@ export class EmailSearchService implements OnModuleInit {
       [userId, batchSize],
     );
 
-    for (const r of rows) {
+    if (!rows || rows.length === 0) return 0;
+
+    // Batch embedding to reduce API calls and cost. Gemini supports multiple contents in one request.
+    const chunkSize = 10; // number of texts per embed API call
+    let processed = 0;
+
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize);
+      const texts = chunk.map((r) => `${r.subject || ''}\n\n${r.body || ''}`);
+
       try {
-        await this.indexEmailEmbedding(r.id);
+        // prefer batch embedding when possible
+        const embeddings = await (this.geminiClient?.embedMany ? this.geminiClient.embedMany(texts) : Promise.all(texts.map((t) => this.generateEmbedding(t))));
+
+        for (let j = 0; j < chunk.length; j++) {
+          const email = chunk[j];
+          const emb = embeddings?.[j];
+          if (!emb || !Array.isArray(emb)) {
+            this.logger.warn(`No embedding for email ${email.id}, skipping`);
+            continue;
+          }
+          const vectorParam = '[' + emb.join(',') + ']';
+          try {
+            await this.dataSource.query('UPDATE emails SET embedding = $1::vector WHERE id = $2', [vectorParam, email.id]);
+            processed += 1;
+          } catch (err) {
+            this.logger.warn(`Failed to update embedding for email ${email.id}: ${(err as Error).message}`);
+          }
+        }
       } catch (err) {
-        this.logger.warn(`Failed to index embedding for email ${r.id}: ${(err as Error).message}`);
+        const msg = (err as any)?.message || '';
+        this.logger.warn(`Batch embedding failed for user ${userId}: ${msg}`);
+        // If quota exhausted, disable semanticAvailable to prevent further calls and break
+        const isQuota = msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota') || msg.includes('429');
+        if (isQuota) {
+          this.logger.warn('Gemini quota exhausted; disabling semantic usage temporarily');
+          this.semanticAvailable = false;
+          break;
+        }
+        // fallback: try per-email embedding
+        for (const email of chunk) {
+          try {
+            await this.indexEmailEmbedding(email.id);
+            processed += 1;
+          } catch (err2) {
+            this.logger.warn(`Failed to index embedding for email ${email.id}: ${(err2 as Error).message}`);
+          }
+        }
       }
     }
 
-    return rows.length;
+    return processed;
   }
 
   async semanticSearch(
