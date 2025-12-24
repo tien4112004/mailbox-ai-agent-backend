@@ -11,7 +11,20 @@ export class GeminiClient {
 
   async embed(text: string): Promise<number[]> {
     try {
-      const response = await this.ai.gemini.embedContent?.({ model: this.model, contents: [text] });
+      // Try provider-specific surfaces in order of preference
+      let response: any;
+      // Gemini surface (preferred)
+      if (this.ai?.gemini?.embedContent) {
+        response = await this.ai.gemini.embedContent({ model: this.model, contents: [text] });
+      } else if (this.ai?.models?.embedContent) {
+        // Older SDK exposes .models.embedContent
+        response = await this.ai.models.embedContent({ model: this.model, contents: [text] });
+      } else if (typeof this.ai?.embedContent === 'function') {
+        // Fallback generic name
+        response = await this.ai.embedContent({ model: this.model, contents: [text] });
+      } else {
+        throw new Error('Gemini SDK does not expose embedContent method');
+      }
 
       // SDK typically returns an object with embeddings; try a few shapes
       const emb = response?.embeddings?.[0]?.embedding || response?.data?.[0]?.embedding || response?.outputs?.[0]?.embedding || null;

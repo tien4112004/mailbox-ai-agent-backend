@@ -108,6 +108,12 @@ export class EmailsService {
         `Successfully synced ${savedEmails.length} emails to database for user ${userId}`,
       );
 
+      // Kick off background embedding indexing for newly synced emails
+      this.emailSearchService
+        .indexMissingEmbeddings(userId, 100)
+        .then((count) => this.logger.log(`Background indexed up to ${count} embeddings for user ${userId}`))
+        .catch((err) => this.logger.warn(`Background embedding indexing failed for user ${userId}: ${err.message}`));
+
       return savedEmails.length;
     } catch (error) {
       this.logger.error(

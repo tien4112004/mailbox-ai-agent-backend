@@ -29,7 +29,53 @@ export class EmailSearchService implements OnModuleInit {
       this.semanticAvailable = await this.geminiClient.checkModelAvailability();
     } catch (err) {
       this.logger.warn('Gemini model availability check failed: ' + (err as Error).message);
-      this.semanticAvailable = false;
+      // If a key exists we will optimistically enable semantic search and attempt to index embeddings in background.
+      // This allows transient availability or model naming mismatches to be handled at runtime when embedding calls are made.
+      this.semanticAvailable = Boolean(key);
+      if (this.semanticAvailable) {
+        this.logger.warn('Forcing semanticAvailable=true because GEMINI_API_KEY is present. Failed model checks may still disable semantic search at runtime.');
+      }
+    }
+
+    // If semantic search is enabled (either via successful check or forced), start background indexing of missing embeddings
+    if (this.defaultEnableSemantic && this.semanticAvailable) {
+      // run in background, do not block startup
+      this.indexAllMissingEmbeddingsInBackground().catch((err) => {
+        this.logger.warn('Background embedding indexing failed to start: ' + (err as Error).message);
+      });
+    }
+  }
+
+  /**
+   * Find all users with emails missing embeddings and kick off indexing for each.
+   * Runs in background and logs progress.
+   */
+  private async indexAllMissingEmbeddingsInBackground(): Promise<void> {
+    try {
+      this.logger.log('Starting background job to index missing embeddings for users');
+      const rows: Array<{ user_id: string }> = await this.dataSource.query(
+        `SELECT DISTINCT user_id FROM emails WHERE embedding IS NULL`,
+      );
+
+      if (!rows || rows.length === 0) {
+        this.logger.log('No missing embeddings found at startup');
+        return;
+      }
+
+      for (const r of rows) {
+        const userId = r.user_id;
+        // Fire-and-forget per user but await sequentially to avoid overwhelming the API
+        try {
+          const count = await this.indexMissingEmbeddings(userId, 100);
+          this.logger.log(`Indexed up to ${count} missing embeddings for user ${userId}`);
+        } catch (err) {
+          this.logger.warn(`Failed to index embeddings for user ${userId}: ${(err as Error).message}`);
+        }
+      }
+
+      this.logger.log('Background embedding indexing job completed');
+    } catch (err) {
+      this.logger.warn('Error while starting background embedding indexing: ' + (err as Error).message);
     }
   }
 
@@ -416,12 +462,12 @@ export class EmailSearchService implements OnModuleInit {
         const fieldConditions = fields
           .map(
             (field) =>
-              `e."${field}" % $1::text AND similarity(e."${field}", $1::text) > $3`,
+              `e."${field}"::text % $1::text AND similarity(e."${field}"::text, $1::text) > $3`,
           )
           .join(' OR ');
 
         const similarityCase = fields
-          .map((field) => `similarity(e."${field}", $1::text)`)
+          .map((field) => `similarity(e."${field}"::text, $1::text)`)
           .join(', ');
 
         const sql = `
@@ -532,12 +578,12 @@ export class EmailSearchService implements OnModuleInit {
       const sql = `
         SELECT 
           e.*,
-          similarity(e."${field}", $1::text) as similarity
+         similarity(e."${field}"::text, $1::text) as similarity
         FROM emails e
         WHERE 
           e.user_id = $2
-          AND e."${field}" % $1::text
-          AND similarity(e."${field}", $1::text) > $3
+         AND e."${field}"::text % $1::text
+         AND similarity(e."${field}"::text, $1::text) > $3
         ORDER BY similarity DESC
         LIMIT $4
       `;
