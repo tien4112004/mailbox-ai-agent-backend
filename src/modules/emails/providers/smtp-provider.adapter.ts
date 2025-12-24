@@ -157,8 +157,7 @@ export class SmtpProviderAdapter implements EmailProvider {
       read: email.read,
       starred: email.starred,
       folder: email.folder,
-      attachments: email.attachments || [],
-      threadId: email.threadId,
+      attachments: email.attachments || []
     };
   }
 

@@ -27,7 +27,6 @@ import { SnoozeEmailDto } from './dto/snooze-email.dto';
 import { SummarizeEmailDto } from './dto/summarize-email.dto';
 import { CreateKanbanColumnDto } from './dto/create-kanban-column.dto';
 import { MoveCardDto } from './dto/move-card.dto';
-import { FuzzySearchEmailDto } from './dto/fuzzy-search-email.dto';
 import { AdvancedSearchDto, SuggestionQueryDto } from './dto/advanced-search.dto';
 import { KanbanFilterSortDto } from './dto/kanban-filter-sort.dto';
 import { CreateSmtpConfigDto } from './dto/create-smtp-config.dto';
@@ -207,13 +206,7 @@ export class EmailsController {
     return this.emailsService.getEmails(req.user.id, dto);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get email detail by ID' })
-  @ApiResponse({ status: 200, description: 'Email detail retrieved' })
-  @ApiResponse({ status: 404, description: 'Email not found' })
-  async getEmailById(@Request() req, @Param('id') id: string) {
-    return this.emailsService.getEmailById(req.user.id, id);
-  }
+  // NOTE: moved getEmailById below to avoid route collision with static routes like '/search'
 
   @Post('send')
   @ApiOperation({ summary: 'Send a new email' })
@@ -752,6 +745,14 @@ export class EmailsController {
 
     const emails = res.results.map((r) => this.emailsService.normalizeEmailResponse(r, true));
     return emails;
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get email detail by ID' })
+  @ApiResponse({ status: 200, description: 'Email detail retrieved' })
+  @ApiResponse({ status: 404, description: 'Email not found' })
+  async getEmailById(@Request() req, @Param('id') id: string) {
+    return this.emailsService.getEmailById(req.user.id, id);
   }
 
   // ==================== ADVANCED SEARCH ENDPOINTS ====================
