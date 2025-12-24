@@ -8,6 +8,7 @@ import { ModifyEmailDto } from '../dto/modify-email.dto';
 import { AdvancedSearchDto, SuggestionQueryDto } from '../dto/advanced-search.dto';
 import { Email } from '../../../database/entities/email.entity';
 import { GmailService } from './gmail.service';
+import { EmailSearchService } from './search.service';
 import { EmailProviderFactory } from '../providers/email-provider.factory';
 import { AuthService } from '../../auth/auth.service';
 import { SearchQueryParser, SearchCriteria } from './search-query-parser.service';
@@ -26,6 +27,7 @@ export class EmailsService {
     private authService: AuthService,
     private emailProviderFactory: EmailProviderFactory,
     private searchQueryParser: SearchQueryParser,
+    private emailSearchService: EmailSearchService,
   ) { }
 
   async syncInitialEmails(userId: string): Promise<number> {
@@ -106,6 +108,12 @@ export class EmailsService {
         `Successfully synced ${savedEmails.length} emails to database for user ${userId}`,
       );
 
+      // Kick off background embedding indexing for newly synced emails
+      this.emailSearchService
+        .indexMissingEmbeddings(userId, 100)
+        .then((count) => this.logger.log(`Background indexed up to ${count} embeddings for user ${userId}`))
+        .catch((err) => this.logger.warn(`Background embedding indexing failed for user ${userId}: ${err.message}`));
+
       return savedEmails.length;
     } catch (error) {
       this.logger.error(
@@ -157,7 +165,14 @@ export class EmailsService {
             return null; // Skip duplicate
           }
 
-          return this.emailRepository.save(email);
+          const saved = await this.emailRepository.save(email);
+
+          // Fire-and-forget: index embedding for semantic search (do not block response)
+          this.emailSearchService.indexEmailEmbedding(saved.id).catch((err) =>
+            this.logger.warn(`Failed to index embedding for email ${saved.id}: ${err.message}`),
+          );
+
+          return saved;
         }),
       );
 
@@ -234,7 +249,7 @@ export class EmailsService {
    * Normalize email response format for consistent FE handling
    * Converts both database and Gmail API formats to a unified structure
    */
-  private normalizeEmailResponse(email: any, isFromDatabase: boolean = false) {
+  normalizeEmailResponse(email: any, isFromDatabase: boolean = false) {
     if (isFromDatabase) {
       // Database format -> Unified format
       return {

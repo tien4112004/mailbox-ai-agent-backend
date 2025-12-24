@@ -13,6 +13,10 @@ export class CreateKanbanColumnDto {
 
   @IsOptional()
   @IsString()
+  labelId?: string;
+
+  @IsOptional()
+  @IsString()
   status?: string;
 
   @IsOptional()

@@ -13,15 +13,9 @@ The Email Search & Filter API provides powerful tools to find, filter, and organ
 ### Key Features
 
 - **PostgreSQL Full-Text Search with pg_trgm**: Uses fuzzy matching for intelligent search
-- **Multi-Field Search**: Search subject, sender email, and body content
-- **Configurable Similarity Threshold**: Fine-tune search sensitivity (0.0 to 1.0)
-- **Gmail Folder Support**: Filter by any Gmail label (INBOX, SENT, DRAFTS, etc.)
-- **Pagination**: Efficient handling of large email datasets with page tokens
-
-## Base URL
-
-```
-/api/emails
+### Search results (unified endpoint)
+curl -X GET "http://localhost:3000/api/emails/search?query=project" \
+  -H "Authorization: Bearer <token>"
 ```
 
 ## Authentication
@@ -34,6 +28,9 @@ Authorization: Bearer <access_token>
 
 ---
 
+### Using unified search to filter by sender
+curl -X GET "http://localhost:3000/api/emails/search?query=john@example.com" \
+  -H "Authorization: Bearer <token>"
 # 1. GET EMAILS WITH FILTERS
 
 ## Endpoint
@@ -47,6 +44,9 @@ GET /api/emails/list
 Retrieve emails with optional filtering, searching, and pagination.
 
 ## Request Parameters
+### Search for Emails About a Project
+curl -X GET "http://localhost:3000/api/emails/search?query=Q4+marketing+campaign" \
+  -H "Authorization: Bearer <token>"
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -59,6 +59,9 @@ Retrieve emails with optional filtering, searching, and pagination.
 
 ### Basic Email List
 ```bash
+### Search Sent Folder by Subject
+curl -X GET "http://localhost:3000/api/emails/search?query=thank+you" \
+  -H "Authorization: Bearer <token>"
 GET /api/emails/list
 Authorization: Bearer <token>
 ```
@@ -145,260 +148,60 @@ Authorization: Bearer <token>
 ```
 
 ---
+# 2. SEARCH (UNIFIED)
 
-# 2. FUZZY SEARCH (MULTIPLE FIELDS)
+Use the single unified endpoint to run fuzzy/trigram text search and semantic (embedding) search where available. This replaces the previous `/api/emails/search/fuzzy` and `/api/emails/search/fuzzy/:field` endpoints.
 
 ## Endpoint
 
 ```http
-POST /api/emails/search/fuzzy
+GET /api/emails/search?query=your+search+terms
 ```
 
 ## Description
 
-Advanced fuzzy search across multiple email fields (subject, sender, body) with similarity matching using PostgreSQL's `pg_trgm` extension.
+Run a combined search applying typo-tolerant fuzzy matching, trigram similarity, and semantic (vector) search when enabled. Results are merged and ranked by relevance.
 
-## Request Body
+## Request
 
-```json
-{
-  "query": "marketing campaign",
-  "fields": "subject,from_email,body",
-  "limit": 20,
-  "threshold": 0.3
-}
-```
-
-### Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `query` | string | **Yes** | - | Search query (e.g., "marketing", "john doe") |
-| `fields` | string | No | `subject,from_email` | Comma-separated fields to search: `subject`, `from_email`, `body` |
-| `limit` | number | No | `20` | Max results to return (1-100) |
-| `threshold` | number | No | `0.3` | Similarity threshold (0.0-1.0). Higher = stricter matching |
+Provide only the `query` as a query string parameter. Other options (`fields`, `limit`, `threshold`) can be provided in the request. Semantic (embedding) search is applied automatically when runtime availability (Gemini API key and model) is satisfied.
 
 ## Examples
 
-### Basic Fuzzy Search
 ```bash
-curl -X POST http://localhost:3000/api/emails/search/fuzzy \
+curl -X POST http://localhost:3000/api/emails/search \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "meeting"
-  }'
-```
-
-### Search Multiple Fields
-```bash
-curl -X POST http://localhost:3000/api/emails/search/fuzzy \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "john",
-    "fields": "subject,from_email,body",
-    "limit": 50
-  }'
-```
-
-### Strict Matching (High Threshold)
-```bash
-curl -X POST http://localhost:3000/api/emails/search/fuzzy \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "project deadline",
-    "threshold": 0.7,
-    "limit": 10
-  }'
-```
-
-### Loose Matching (Low Threshold)
-```bash
-curl -X POST http://localhost:3000/api/emails/search/fuzzy \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "projct",
-    "threshold": 0.2,
+    "query": "meeting",
     "limit": 20
   }'
 ```
 
 ## Response
 
-### Success (200 OK)
+Returns an array of normalized email objects (same format as other email list endpoints):
 
 ```json
-{
-  "query": "marketing",
-  "count": 5,
-  "results": [
-    {
-      "id": "email-id-1",
-      "subject": "Q4 Marketing Campaign",
-      "from_email": "marketing@company.com",
-      "body": "This is about our marketing strategy...",
-      "preview": "This is about our marketing strategy...",
-      "read": false,
-      "starred": false,
-      "similarity": 0.95,
-      "createdAt": "2025-12-15T14:30:00Z"
-    },
-    {
-      "id": "email-id-2",
-      "subject": "Marketing Team Meeting",
-      "from_email": "manager@company.com",
-      "body": "Let's discuss the marketing plan...",
-      "preview": "Let's discuss the marketing plan...",
-      "read": true,
-      "starred": true,
-      "similarity": 0.87,
-      "createdAt": "2025-12-14T10:15:00Z"
-    }
-  ]
-}
+[
+  {
+    "id": "...",
+    "subject": "Q4 Marketing Campaign",
+    "from": { "name": "Marketing", "email": "marketing@company.com" },
+    "to": ["you@example.com"],
+    "date": "2025-12-15T14:30:00Z",
+    "snippet": "This is about our marketing strategy...",
+    "body": "This is about our marketing strategy...",
+    "read": false,
+    "starred": false,
+    "folder": "INBOX",
+    "attachments": []
+  }
+]
 ```
 
-## Error Responses
-
-### 400 Bad Request - Empty Query
-```json
-{
-  "statusCode": 400,
-  "message": "Search query cannot be empty",
-  "error": "Bad Request"
-}
-```
-
-### 400 Bad Request - Invalid Fields
-```json
-{
-  "statusCode": 400,
-  "message": "Invalid fields. Must be one or more of: subject, from_email, body",
-  "error": "Bad Request"
-}
-```
-
-### 401 Unauthorized
-```json
-{
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized"
-}
-```
-
----
-
-# 3. FUZZY SEARCH (SINGLE FIELD)
-
-## Endpoint
-
-```http
-POST /api/emails/search/fuzzy/:field
-```
-
-## Description
-
-Search emails in a specific field with fine-tuned control over similarity matching.
-
-## URL Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `field` | string | **Yes** | Field to search: `subject`, `from_email`, or `body` |
-
-## Query Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `q` | string | **Yes** | - | Search query |
-| `limit` | number | No | `20` | Max results (1-100) |
-| `threshold` | number | No | `0.3` | Similarity threshold (0.0-1.0) |
-
-## Examples
-
-### Search in Subject Field
-```bash
-curl -X POST "http://localhost:3000/api/emails/search/fuzzy/subject?q=urgent&limit=10" \
-  -H "Authorization: Bearer <token>"
-```
-
-### Search in Sender Field
-```bash
-curl -X POST "http://localhost:3000/api/emails/search/fuzzy/from_email?q=john@example.com&limit=20" \
-  -H "Authorization: Bearer <token>"
-```
-
-### Search in Body with High Threshold
-```bash
-curl -X POST "http://localhost:3000/api/emails/search/fuzzy/body?q=contract&threshold=0.6&limit=15" \
-  -H "Authorization: Bearer <token>"
-```
-
-### Search with Loose Matching
-```bash
-curl -X POST "http://localhost:3000/api/emails/search/fuzzy/subject?q=aproximate+spelling&threshold=0.2" \
-  -H "Authorization: Bearer <token>"
-```
-
-## Response
-
-### Success (200 OK)
-
-```json
-{
-  "field": "subject",
-  "query": "urgent",
-  "count": 3,
-  "results": [
-    {
-      "id": "email-1",
-      "subject": "URGENT: Project Update",
-      "from_email": "boss@company.com",
-      "body": "Please review the attached document...",
-      "read": false,
-      "starred": true,
-      "similarity": 0.98,
-      "createdAt": "2025-12-16T08:00:00Z"
-    },
-    {
-      "id": "email-2",
-      "subject": "Urgent Meeting at 3 PM",
-      "from_email": "colleague@company.com",
-      "body": "Let's meet to discuss...",
-      "read": true,
-      "starred": false,
-      "similarity": 0.92,
-      "createdAt": "2025-12-15T15:30:00Z"
-    }
-  ]
-}
-```
-
-## Error Responses
-
-### 400 Bad Request - Missing Query
-```json
-{
-  "statusCode": 400,
-  "message": "Query parameter 'q' is required",
-  "error": "Bad Request"
-}
-```
-
-### 400 Bad Request - Invalid Field
-```json
-{
-  "statusCode": 400,
-  "message": "Invalid field 'invalid_field'. Allowed fields: subject, from_email, body",
-  "error": "Bad Request"
-}
-```
-
----
+Notes:
+- Old fuzzy and field-specific endpoints have been removed. Use `/api/emails/search` for all search needs.
 
 # 4. SIMILARITY THRESHOLD GUIDE
 
@@ -442,8 +245,8 @@ You can combine multiple endpoints for advanced queries:
 curl -X GET "http://localhost:3000/api/emails/list?folder=INBOX" \
   -H "Authorization: Bearer <token>"
 
-# Step 2: Fuzzy search results
-curl -X POST "http://localhost:3000/api/emails/search/fuzzy" \
+# Step 2: Search results (unified endpoint)
+curl -X POST "http://localhost:3000/api/emails/search" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -461,9 +264,15 @@ curl -X POST "http://localhost:3000/api/emails/search/fuzzy" \
 curl -X GET "http://localhost:3000/api/emails/list?folder=INBOX&search=from:john@example.com" \
   -H "Authorization: Bearer <token>"
 
-# Method 2: Using fuzzy search by field
-curl -X POST "http://localhost:3000/api/emails/search/fuzzy/from_email?q=john@example.com&limit=50" \
-  -H "Authorization: Bearer <token>"
+# Method 2: Using unified search to filter by sender
+curl -X POST "http://localhost:3000/api/emails/search" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "john@example.com",
+    "fields": "from_email",
+    "limit": 50
+  }'
 ```
 
 ---
@@ -472,7 +281,7 @@ curl -X POST "http://localhost:3000/api/emails/search/fuzzy/from_email?q=john@ex
 
 ### Search for Emails About a Project
 ```bash
-curl -X POST "http://localhost:3000/api/emails/search/fuzzy" \
+curl -X POST "http://localhost:3000/api/emails/search" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -485,8 +294,14 @@ curl -X POST "http://localhost:3000/api/emails/search/fuzzy" \
 
 ### Find Emails from a Specific Person (Typo Tolerant)
 ```bash
-curl -X POST "http://localhost:3000/api/emails/search/fuzzy/from_email?q=johhn@company.com&threshold=0.6" \
-  -H "Authorization: Bearer <token>"
+curl -X POST "http://localhost:3000/api/emails/search" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "johhn@company.com",
+    "fields": "from_email",
+    "threshold": 0.6
+  }'
 ```
 
 ### Search for Important Emails
@@ -503,8 +318,14 @@ curl -X GET "http://localhost:3000/api/emails/list?search=is:unread has:attachme
 
 ### Search Sent Folder by Subject
 ```bash
-curl -X POST "http://localhost:3000/api/emails/search/fuzzy/subject?q=thank+you&limit=20" \
-  -H "Authorization: Bearer <token>"
+curl -X POST "http://localhost:3000/api/emails/search" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "thank you",
+    "fields": "subject",
+    "limit": 20
+  }'
 ```
 
 ---

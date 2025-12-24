@@ -170,12 +170,19 @@ export class GmailService {
    * Get email by ID with full details
    */
   async getEmailById(accessToken: string, refreshToken: string, emailId: string) {
+    // Normalize and validate message id (strip angle brackets and whitespace)
+    const normalizedId = (emailId || '').toString().trim().replace(/^<|>$/g, '');
+    if (!normalizedId) {
+      this.logger.error(`Invalid Gmail message id: ${emailId}`);
+      throw new Error('Invalid id value');
+    }
+
     try {
       const gmail = this.getGmailClient(accessToken, refreshToken);
-      
+
       const response = await gmail.users.messages.get({
         userId: 'me',
-        id: emailId,
+        id: normalizedId,
         format: 'full',
       });
 
@@ -223,6 +230,13 @@ export class GmailService {
         internalDate: message.internalDate,
       };
     } catch (error) {
+      // Normalize common API errors for clarity
+      const msg = (error as any)?.message || '';
+      if (msg.includes('Invalid id value')) {
+        this.logger.error(`Invalid Gmail message id provided: ${emailId}`);
+        throw new Error('Invalid id value');
+      }
+
       this.logger.error(`Error getting email ${emailId}`, error);
       throw error;
     }

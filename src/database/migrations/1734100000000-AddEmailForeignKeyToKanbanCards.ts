@@ -2,16 +2,20 @@ import { MigrationInterface, QueryRunner, TableForeignKey } from 'typeorm';
 
 export class AddEmailForeignKeyToKanbanCards1735773700000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Add foreign key from kanban_cards.emailId to emails.id
-    await queryRunner.createForeignKey(
-      'kanban_cards',
-      new TableForeignKey({
-        columnNames: ['emailId'],
-        referencedColumnNames: ['id'],
-        referencedTableName: 'emails',
-        onDelete: 'CASCADE',
-      }),
-    );
+    // Add foreign key from kanban_cards.emailId to emails.id if missing
+    const table = await queryRunner.getTable('kanban_cards');
+    const hasFk = table?.foreignKeys.some((fk) => fk.columnNames.includes('emailId') && fk.referencedTableName === 'emails');
+    if (!hasFk) {
+      await queryRunner.createForeignKey(
+        'kanban_cards',
+        new TableForeignKey({
+          columnNames: ['emailId'],
+          referencedColumnNames: ['id'],
+          referencedTableName: 'emails',
+          onDelete: 'CASCADE',
+        }),
+      );
+    }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

@@ -1,6 +1,6 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -74,8 +74,8 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   const host = process.env.HOST || '0.0.0.0';
   await app.listen(port, host);
-  console.log(`🚀 Application is running on: http://${host}:${port}`);
-  console.log(`📚 Swagger documentation: http://${host}:${port}/docs`);
+  Logger.log(`🚀 Application is running on: http://${host}:${port}`);
+  Logger.log(`📚 Swagger documentation: http://${host}:${port}/docs`);
 }
 
 bootstrap();
