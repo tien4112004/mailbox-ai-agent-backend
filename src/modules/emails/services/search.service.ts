@@ -13,11 +13,12 @@ export class EmailSearchService implements OnModuleInit {
 
   private semanticAvailable = false;
   private geminiClient?: GeminiClient;
+  private static readonly GEMINI_MODEL = 'gemini-embedding-001';
 
   async onModuleInit(): Promise<void> {
     // Initialize Gemini client and check availability at startup so we can disable semantic search if model/key is invalid
-    const key = this.geminiApiKey;
-    const model = this.geminiModel;
+  const key = this.geminiApiKey;
+  const model = EmailSearchService.GEMINI_MODEL;
     if (!key) {
       this.logger.warn('Gemini API key not configured; disabling semantic search');
       this.semanticAvailable = false;
@@ -37,8 +38,8 @@ export class EmailSearchService implements OnModuleInit {
       }
     }
 
-    // If semantic search is enabled (either via successful check or forced), start background indexing of missing embeddings
-    if (this.defaultEnableSemantic && this.semanticAvailable) {
+    // If semantic search is available, start background indexing of missing embeddings
+    if (this.semanticAvailable) {
       // run in background, do not block startup
       this.indexAllMissingEmbeddingsInBackground().catch((err) => {
         this.logger.warn('Background embedding indexing failed to start: ' + (err as Error).message);
@@ -80,9 +81,8 @@ export class EmailSearchService implements OnModuleInit {
   }
 
   private async checkGeminiModelAvailability(): Promise<boolean> {
-    // Keep compatibility - use the instantiated client if available
-    const key = this.geminiApiKey;
-    const model = this.geminiModel;
+  const key = this.geminiApiKey;
+  const model = EmailSearchService.GEMINI_MODEL;
     if (!key) {
       this.logger.warn('Gemini API key not configured; disabling semantic search');
       this.semanticAvailable = false;
@@ -112,13 +112,7 @@ export class EmailSearchService implements OnModuleInit {
     );
   }
 
-  private get geminiModel(): string {
-    // Hardcoded model selection to balance cost and performance. Change here when you want to switch models.
-    return 'gemini-embedding-001';
-  }
-
   private async generateEmbedding(text: string): Promise<number[]> {
-    // Use Gemini (Google) embeddings only
     const geminiKey = this.geminiApiKey;
     if (!geminiKey) {
       throw new HttpException(
@@ -127,17 +121,16 @@ export class EmailSearchService implements OnModuleInit {
       );
     }
     if (!this.geminiClient) {
-      this.geminiClient = new GeminiClient(geminiKey, this.geminiModel);
+      this.geminiClient = new GeminiClient(geminiKey, EmailSearchService.GEMINI_MODEL);
     }
 
     try {
       const emb = await this.geminiClient.embed(text);
       return emb;
     } catch (error) {
-      // If model not found (404) or similar, disable semantic search to avoid repeated failures
       const errMsg = (error as Error).message || '';
       if (errMsg.includes('Requested entity was not found') || errMsg.includes('404')) {
-        this.logger.warn(`Gemini model ${this.geminiModel} not found or inaccessible; disabling semantic search`);
+        this.logger.warn(`Gemini model ${EmailSearchService.GEMINI_MODEL} not found or inaccessible; disabling semantic search`);
         this.semanticAvailable = false;
       }
       this.logger.error('Error generating embedding with Gemini:', error as any);
@@ -194,11 +187,9 @@ export class EmailSearchService implements OnModuleInit {
       throw new BadRequestException('Search query cannot be empty');
     }
 
-    // ensure embeddings for query and perform vector search
     const queryEmbedding = await this.generateEmbedding(queryText);
     const param = '[' + queryEmbedding.join(',') + ']';
 
-    // Ensure we only search emails with embeddings
     const sql = `
       SELECT
         e.*,
@@ -239,13 +230,7 @@ export class EmailSearchService implements OnModuleInit {
     return isNaN(v) ? 0.3 : v;
   }
 
-  private get defaultEnableSemantic(): boolean {
-    const raw = this.configService.get<any>('search.enableSemantic') ?? process.env.SEARCH_ENABLE_SEMANTIC;
-    if (raw === undefined || raw === null) return true;
-    if (typeof raw === 'string') return raw === 'true' || raw === '1';
-    // Only enable semantic if configuration allows AND Gemini model/key is available
-    return Boolean(raw) && this.semanticAvailable;
-  }
+  // semantic enabling is now governed by runtime availability (Gemini key/model).
 
   async combinedSearch(
     userId: string,
@@ -258,12 +243,10 @@ export class EmailSearchService implements OnModuleInit {
     const limit = limitOverride || this.defaultLimit;
     const fields = this.defaultFields;
     const threshold = this.defaultThreshold;
-    const enableSemantic = this.defaultEnableSemantic;
+  const enableSemantic = this.semanticAvailable;
 
-    // container to merge results
     const merged = new Map<string, any>();
 
-    // 1) Run fuzzy search (existing implementation) - try/catch to continue on error
     try {
       const fuzzyRes = await this.fuzzySearchEmails(userId, { query, limit, fields: fields.join(','), threshold } as any);
       for (const r of fuzzyRes.results) {
@@ -273,7 +256,6 @@ export class EmailSearchService implements OnModuleInit {
       this.logger.warn(`Fuzzy search failed: ${(err as Error).message}`);
     }
 
-    // 2) Try trigram-like search via fuzzySearchByField per field (to get higher similarity values)
     try {
       for (const field of fields) {
         try {
@@ -289,7 +271,6 @@ export class EmailSearchService implements OnModuleInit {
             }
           }
         } catch (err) {
-          // ignore single-field failures
           this.logger.debug(`Trigram search failed for field ${field}: ${(err as Error).message}`);
         }
       }
@@ -297,7 +278,6 @@ export class EmailSearchService implements OnModuleInit {
       this.logger.warn(`Trigram searches failed: ${(err as Error).message}`);
     }
 
-    // 3) Semantic search (if enabled and embeddings available)
     if (enableSemantic) {
       try {
         const semRes = await this.semanticSearch(userId, query, limit * 2);
