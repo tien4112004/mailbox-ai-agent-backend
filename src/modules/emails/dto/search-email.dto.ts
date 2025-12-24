@@ -25,9 +25,4 @@ export class SearchEmailDto {
   @Min(0)
   @Max(1)
   threshold?: number = 0.3;
-
-  @ApiProperty({ description: 'Enable semantic search (embeddings) when available', example: true, default: true, required: false })
-  @IsBoolean()
-  @IsOptional()
-  enableSemantic?: boolean = true;
 }
