@@ -28,10 +28,6 @@ export class EmailsService {
     private searchQueryParser: SearchQueryParser,
   ) { }
 
-  /**
-   * Sync initial emails from Gmail inbox to database
-   * Removes old emails and fetches up to 100 new emails from Gmail INBOX
-   */
   async syncInitialEmails(userId: string): Promise<number> {
     try {
       this.logger.log(`Starting initial email sync for user ${userId}`);
@@ -97,6 +93,7 @@ export class EmailsService {
           starred: gmailEmail.labels?.includes('STARRED') || false,
           folder: 'INBOX',
           attachments: gmailEmail.attachments || null,
+          messageId: gmailEmail.id || null,
           userId,
           createdAt: new Date(gmailEmail.date),
         });
@@ -136,6 +133,8 @@ export class EmailsService {
           starred: email.isStarred !== undefined ? email.isStarred : email.labelIds?.includes('STARRED') || false,
           folder: email.folder || 'INBOX',
           attachments: email.attachments || null,
+          // Preserve provider message id if available (Gmail/IMAP)
+          messageId: (email.messageId || email.id || email.threadId) || null,
           userId,
           createdAt: new Date(email.date),
         });
@@ -260,6 +259,8 @@ export class EmailsService {
         labelIds: [],
         attachments: email.attachments || [],
         summary: email.summary || null,
+        source: 'db',
+        gmailMessageId: email.messageId || null,
       };
     } else {
       // Gmail API format -> Unified format
@@ -282,19 +283,37 @@ export class EmailsService {
         labelIds: email.labelIds || [],
         attachments: email.attachments || [],
         summary: null,
+        source: 'gmail',
+        gmailMessageId: email.id,
       };
     }
   }
 
   async getEmailById(userId: string, emailId: string) {
-    const provider = await this.emailProviderFactory.createProvider(userId);
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-    const email = await provider.getEmailById(emailId);
+    if (uuidRegex.test(emailId)) {
+      const dbEmail = await this.emailRepository.findOne({ where: { id: emailId, userId } });
+      if (dbEmail) {
+        if (dbEmail.messageId) {
+          try {
+            const provider = await this.emailProviderFactory.createProvider(userId);
+            const providerEmail = await provider.getEmailById(dbEmail.messageId);
+            if (providerEmail) return this.normalizeEmailResponse(providerEmail, false);
+          } catch (err) {
+            this.logger.debug(`Provider fetch failed for ${dbEmail.messageId}, falling back to DB: ${err.message}`);
+            return this.normalizeEmailResponse(dbEmail, true);
+          }
+        }
 
-    if (!email) {
-      throw new NotFoundException('Email not found');
+        return this.normalizeEmailResponse(dbEmail, true);
+      }
+      // DB miss - fallthrough to provider lookup
     }
 
+    const provider = await this.emailProviderFactory.createProvider(userId);
+    const email = await provider.getEmailById(emailId);
+    if (!email) throw new NotFoundException('Email not found');
     return this.normalizeEmailResponse(email, false);
   }
 
