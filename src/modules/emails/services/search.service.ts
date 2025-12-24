@@ -3,7 +3,7 @@ import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Email } from '../../../database/entities/email.entity';
 import { GeminiClient } from '../providers/gemini.client';
-// Search parameters (limit, fields, threshold, enableSemantic) are read from configuration/env
+// Search parameters (limit, fields, threshold) are configurable; semantic search is runtime-driven (Gemini availability)
 
 @Injectable()
 export class EmailSearchService implements OnModuleInit {
@@ -243,7 +243,6 @@ export class EmailSearchService implements OnModuleInit {
     const limit = limitOverride || this.defaultLimit;
     const fields = this.defaultFields;
     const threshold = this.defaultThreshold;
-  const enableSemantic = this.semanticAvailable;
 
     const merged = new Map<string, any>();
 
@@ -278,7 +277,7 @@ export class EmailSearchService implements OnModuleInit {
       this.logger.warn(`Trigram searches failed: ${(err as Error).message}`);
     }
 
-    if (enableSemantic) {
+  if (this.semanticAvailable) {
       try {
         const semRes = await this.semanticSearch(userId, query, limit * 2);
         for (const r of semRes.results) {

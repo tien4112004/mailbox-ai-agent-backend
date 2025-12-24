@@ -164,7 +164,7 @@ Run a combined search applying typo-tolerant fuzzy matching, trigram similarity,
 
 ## Request
 
-Provide only the `query` as a query string parameter. Other options (`fields`, `limit`, `threshold`) can be provided in the request. The `enableSemantic` parameter may be supplied to request semantic (embedding) search, but actual use depends on runtime availability (Gemini API key and model availability) and may be ignored if embeddings are not available.
+Provide only the `query` as a query string parameter. Other options (`fields`, `limit`, `threshold`) can be provided in the request. Semantic (embedding) search is applied automatically when runtime availability (Gemini API key and model) is satisfied.
 
 ## Examples
 
