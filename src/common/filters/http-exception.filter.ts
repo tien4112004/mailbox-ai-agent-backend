@@ -29,8 +29,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     let errorResponse: any;
 
+    // Check if this is a Gmail auth expiration error
+    if (exception instanceof HttpException &&
+        typeof message === 'string' &&
+        (message === 'GMAIL_AUTH_EXPIRED' || message === 'GMAIL_AUTH_FAILED')) {
+      errorResponse = {
+        code: status,
+        message: 'Authentication expired. Please log in again.',
+        error: message,
+        requiresLogout: true,
+      };
+    }
     // Check if this is a validation error from our validationExceptionFactory
-    if (exception instanceof HttpException && this.isCustomValidationError(message)) {
+    else if (exception instanceof HttpException && this.isCustomValidationError(message)) {
       // Use the custom validation error format
       errorResponse = {
         code: status,

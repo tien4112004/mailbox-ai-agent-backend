@@ -86,6 +86,30 @@ export class GmailService {
   }
 
   /**
+   * Handle Gmail API errors and convert to appropriate exceptions
+   */
+  private handleGmailError(error: any): never {
+    const errorMessage = error?.message || '';
+    const errorResponse = error?.response?.data?.error || '';
+
+    // Check for OAuth invalid_grant error
+    if (errorMessage.includes('invalid_grant') || errorResponse === 'invalid_grant') {
+      this.logger.error('Gmail OAuth token invalid or expired - user needs to re-authenticate');
+      throw new UnauthorizedException('GMAIL_AUTH_EXPIRED');
+    }
+
+    // Check for other authentication errors
+    if (error?.code === 401 || errorMessage.includes('invalid credentials') || errorMessage.includes('unauthorized')) {
+      this.logger.error('Gmail authentication failed', error);
+      throw new UnauthorizedException('GMAIL_AUTH_FAILED');
+    }
+
+    // Re-throw other errors as-is
+    this.logger.error('Gmail API error', error);
+    throw error;
+  }
+
+  /**
    * List mailboxes (labels) from Gmail
    */
   async listMailboxes(accessToken: string, refreshToken: string) {
@@ -96,11 +120,11 @@ export class GmailService {
       });
 
       const labels = response.data.labels || [];
-      
+
       // Map Gmail labels to our mailbox format
       return labels
-        .filter((label) => 
-          label.type === 'system' || 
+        .filter((label) =>
+          label.type === 'system' ||
           (label.labelListVisibility === 'labelShow' && label.name)
         )
         .map((label) => ({
@@ -111,8 +135,7 @@ export class GmailService {
           type: label.type,
         }));
     } catch (error) {
-      this.logger.error('Error listing mailboxes', error);
-      throw error;
+      this.handleGmailError(error);
     }
   }
 
@@ -129,7 +152,7 @@ export class GmailService {
   ) {
     try {
       const gmail = this.getGmailClient(accessToken, refreshToken);
-      
+
       const listParams: any = {
         userId: 'me',
         maxResults,
@@ -145,9 +168,9 @@ export class GmailService {
       }
 
       const response = await gmail.users.messages.list(listParams);
-      
+
       const messages = response.data.messages || [];
-      
+
       // Fetch full details for each message
       const emailPromises = messages.map((msg) =>
         this.getEmailById(accessToken, refreshToken, msg.id),
@@ -161,8 +184,7 @@ export class GmailService {
         resultSizeEstimate: response.data.resultSizeEstimate,
       };
     } catch (error) {
-      this.logger.error('Error listing emails', error);
-      throw error;
+      this.handleGmailError(error);
     }
   }
 
@@ -514,15 +536,14 @@ export class GmailService {
   async getUserProfile(accessToken: string, refreshToken: string) {
     try {
       const gmail = this.getGmailClient(accessToken, refreshToken);
-      
+
       const response = await gmail.users.getProfile({
         userId: 'me',
       });
 
       return response.data;
     } catch (error) {
-      this.logger.error('Error getting user profile', error);
-      throw error;
+      this.handleGmailError(error);
     }
   }
 }
