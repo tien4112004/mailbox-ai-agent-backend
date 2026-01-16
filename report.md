@@ -8,9 +8,9 @@ GitHub repo URL: \<Your GitHub Repository URL\>
 
 | Student ID | Full name              | Git account       | Contribution                        | Contribution percentage (100% total) | Expected total points | Final total points |
 | :--------- | :--------------------- | :---------------- | :---------------------------------- | :----------------------------------- | :-------------------- | :----------------- |
-| 22120120   | \<Student 1 fullname\> | \<git_account_1\> | \<List of tasks done by student 1\> | 33%                                  |                       |                    |
-| 22120157   | \<Student 2 fullname\> | \<git_account_2\> | \<List of tasks done by student 2\> | 33%                                  |                       |                    |
-| 22120163   | \<Student 3 fullname\> | \<git_account_3\> | \<List of tasks done by student 3\> | 34%                                  |                       |                    |
+| 22120134   | Hoàng Tiến Huy | Sciderus | \<List of tasks done by student 1\> | 33%                                  |                   10    |                    |
+| 22120368   | Phan Thanh Tiến | tien4112004 | \<List of tasks done by student 2\> | 33%                                  |                     10  |                    |
+| 22120370   | Nguyễn Bùi Vương Tiễn | NBVTien | \<List of tasks done by student 3\> | 34%                                  |                    10   |                    |
 
 # **FEATURE LIST**
 
@@ -105,8 +105,8 @@ Students must input minus points to every uncompleted feature in the SE column.
 |        | Multi-tab logout sync                      | 0.25      |          |          | BroadcastChannel for logout sync across tabs                                                                                      |
 |        | Offline caching                            | 0.25      |          |          | IndexedDB + stale-while-revalidate for emails                                                                                     |
 |        | Keyboard navigation                        | 0.25      | 0        |          | Navigate emails with keyboard shortcuts                                                                                           |
-|        | Dockerize your project                     | 0.25      | 0.25     |          | Docker containers for backend, frontend                                                                                           |
-|        | CI/CD                                      | 0.25      | 0.25     |          | Automated testing and deployment pipeline                                                                                         |
+|        | Dockerize your project                     | 0.25      | +0.25     |          | Docker containers for backend, frontend                                                                                           |
+|        | CI/CD                                      | 0.25      | +0.25     |          | Automated testing and deployment pipeline                                                                                         |
 
 # **GIT HISTORY**
 
@@ -146,11 +146,19 @@ Students must input minus points to every uncompleted feature in the SE column.
 - **Frontend:** React, react-window (virtualization), drag-and-drop library
 - **Backend:** Node.js with Express
 - **Database:** PostgreSQL with pgvector for embeddings
-- **Authentication:** Google OAuth2 (Authorization Code flow)
-- **AI/ML:** OpenAI API or Gemini API for summarization and embeddings
-- **Email:** Gmail REST API
-- **Vector Search:** pgvector or similar vector database
-- **Deployment:** Frontend (Netlify/Vercel), Backend (Render/Railway/Cloud Run)
+- **Authentication:** 
+    - Google OAuth2 (Authorization Code flow)  
+    - Username/Password
+- **AI/ML:** Gemini API for summarization and embeddings
+- **Email:** 
+    - Gmail REST API (Google OAuth mode)
+    - IMAP (Username/Password mode)
+- **Vector Search:** pgvector
+- **Deployment:** Frontend (Netlify), Backend (Render) Dockerized
+
+## Database Schemas
+
+-- add here --
 
 ## API Endpoints
 | Endpoint                       | Description                            |
