@@ -51,4 +51,4 @@ import { User } from '../../database/entities/user.entity';
   ],
   exports: [EmailsService, GmailService, ImapService, SmtpService, SnoozeService, SummaryService, KanbanService, KanbanFilterSortService, EmailSearchService, EmailProviderFactory, 'AI_SUMMARY_PROVIDER'],
 })
-export class EmailsModule {}
+export class EmailsModule { }
