@@ -12,6 +12,7 @@ import {
   Headers,
   Put,
   Delete,
+  HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { Response } from 'express';
@@ -31,6 +32,7 @@ import { AdvancedSearchDto, SuggestionQueryDto } from './dto/advanced-search.dto
 import { KanbanFilterSortDto } from './dto/kanban-filter-sort.dto';
 import { CreateSmtpConfigDto } from './dto/create-smtp-config.dto';
 import { UpdateSmtpConfigDto } from './dto/update-smtp-config.dto';
+import { SemanticSearchDto } from './dto/semantic-search.dto';
 import { mockEmails } from './mock';
 
 @ApiTags('emails')
@@ -46,12 +48,12 @@ export class EmailsController {
     private readonly kanbanFilterSortService: KanbanFilterSortService,
     private readonly searchService: EmailSearchService,
     private readonly smtpConfigService: SmtpConfigService,
-  ) {}
+  ) { }
 
   @Get('mailboxes')
   @ApiOperation({ summary: 'Get all mailboxes (Gmail labels)' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'List of mailboxes retrieved',
     schema: {
       example: [
@@ -156,8 +158,8 @@ export class EmailsController {
   @Get('list')
   @ApiOperation({ summary: 'Get emails with filters and pagination' })
   @ApiHeader({ name: 'Mock', required: false, description: 'Set to "true" for mock data' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'List of emails retrieved',
     schema: {
       example: {
@@ -185,7 +187,7 @@ export class EmailsController {
     }
   })
   async getEmails(
-    @Request() req, 
+    @Request() req,
     @Query() dto: GetEmailsDto,
     @Headers('mock') mockHeader?: string
   ) {
@@ -202,7 +204,7 @@ export class EmailsController {
         },
       };
     }
-    
+
     return this.emailsService.getEmails(req.user.id, dto);
   }
 
@@ -210,8 +212,8 @@ export class EmailsController {
 
   @Post('send')
   @ApiOperation({ summary: 'Send a new email' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Email sent successfully',
     schema: {
       example: {
@@ -238,8 +240,8 @@ export class EmailsController {
 
   @Post(':id/modify')
   @ApiOperation({ summary: 'Modify email (read, star, trash, labels)' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Email modified successfully',
     schema: {
       example: {
@@ -685,14 +687,49 @@ export class EmailsController {
     @Request() req,
     @Query('query') query: string,
   ) {
-    const combined = await this.searchService.combinedSearch(req.user.id, query);
+    // Modified to use only fuzzy search as requested
+    const result = await this.searchService.fuzzySearchEmails(req.user.id, { query });
 
     // Return only normalized email objects (no similarity/sources/metadata) as requested
-    const emails = combined.results.map((r) =>
+    const emails = result.results.map((r) =>
       this.emailsService.normalizeEmailResponse(r, true),
     );
 
     return emails;
+  }
+
+  @Get('search/semantic')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Perform semantic search on emails' })
+  @ApiResponse({
+    status: 200,
+    description: 'Semantic search results retrieved',
+    schema: {
+      example: [
+        {
+          id: '18f2a1b3c4d5e6f7',
+          subject: 'Invoice for March',
+          snippet: 'Here is the invoice...',
+          date: '2025-03-01T10:00:00Z',
+          from: { name: 'Billing', email: 'billing@example.com' },
+          similarity: 0.85
+        }
+      ]
+    }
+  })
+  async semanticSearch(
+    @Request() req,
+    @Query() dto: SemanticSearchDto,
+  ) {
+    const userId = req.user.id;
+    const { query, limit = 10 } = dto;
+
+    const result = await this.searchService.semanticSearch(userId, query, limit);
+
+    // Normalize and format results (return standard Email[] to match other search endpoints)
+    return result.results.map(email =>
+      this.emailsService.normalizeEmailResponse(email, true)
+    );
   }
 
   // Compatibility endpoint: old frontend may still call POST /api/emails/search/fuzzy
@@ -758,7 +795,7 @@ export class EmailsController {
   // ==================== ADVANCED SEARCH ENDPOINTS ====================
 
   @Post('search/advanced')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Advanced search with criteria parsing',
     description: 'Search emails using criteria like from:, to:, subject:, contains:, has:attachment, is:read, is:starred, folder:'
   })
@@ -801,7 +838,7 @@ export class EmailsController {
   }
 
   @Get('suggestions/senders')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get sender email suggestions for autocomplete',
     description: 'Returns frequently used sender emails matching the query'
   })
@@ -823,7 +860,7 @@ export class EmailsController {
   }
 
   @Get('suggestions/recipients')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get recipient email suggestions for autocomplete',
     description: 'Returns frequently used recipient emails matching the query'
   })
@@ -845,7 +882,7 @@ export class EmailsController {
   }
 
   @Get('suggestions/subjects')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get subject suggestions for autocomplete',
     description: 'Returns frequently used subjects matching the query'
   })
