@@ -2,7 +2,9 @@
 
 Team: 22120134-22120368-22120370
 
-GitHub repo URL: \<Your GitHub Repository URL\>
+GitHub repo URL: 
+- Backend: 
+- Frontend: 
 
 # **TEAM INFORMATION**
 
@@ -55,7 +57,7 @@ Students must input minus points to every uncompleted feature in the SE column.
 |        | Email cards display                        | \-0.25    | 0        |          | Cards showing sender, subject, snippet                                                                                            |
 |        | Drag-and-drop between columns              | \-0.5     | 0        |          | Drag cards to change email status                                                                                                 |
 |        | Status persistence                         | \-0.25    | 0        |          | Status changes saved and persisted                                                                                                |
-|        | Dynamic Kanban Configuration               | 0         |          |          |                                                                                                                                   |
+|        | **Dynamic Kanban Configuration**               |          |          |          |                                                                                                                                   |
 |        | › Settings interface                       | \-0.25    | 0        |          | Modal/page to create, rename, delete columns                                                                                      |
 |        | › Configuration persistence                | \-0.25    | 0        |          | Custom columns saved and restored after reload                                                                                    |
 |        | › Gmail label mapping                      | \-0.5     | ???      |          | Columns map to Gmail labels, moving cards syncs labels                                                                            |
@@ -64,10 +66,10 @@ Students must input minus points to every uncompleted feature in the SE column.
 |        | Hide snoozed emails                        | \-0.25    |          |          | Email disappears from Kanban after snooze                                                                                         |
 |        | Auto-return on schedule                    | \-0.5     |          |          | Email automatically returns to board at scheduled time                                                                            |
 | **6**  | **AI Features**                            |           |          |          |                                                                                                                                   |
-|        | AI Summarization                           |           |          |          |                                                                                                                                   |
+|        | **AI Summarization**                           |           |          |          |                                                                                                                                   |
 |        | › Backend summarization API                | \-0.5     | 0        |          | LLM integration (OpenAI/Gemini) to summarize email content                                                                        |
 |        | › Summary UI on cards                      | \-0.25    | 0        |          | Display 2-3 line summary on email cards                                                                                           |
-|        | Text Embedding                             |           |          |          |                                                                                                                                   |
+|        | **Text Embedding**                             |           |          |          |                                                                                                                                   |
 |        | › Embedding generation                     | \-0.5     | 0        |          | Generate vector embeddings for emails using embedding model                                                                       |
 |        | › Vector database storage                  | \-0.5     | 0        |          | Store embeddings in vector database (pgvector, etc.)                                                                              |
 | **7**  | **Search Features**                        |           |          |          |                                                                                                                                   |
