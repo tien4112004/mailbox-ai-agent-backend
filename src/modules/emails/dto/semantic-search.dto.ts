@@ -7,7 +7,17 @@ export class SemanticSearchDto {
         example: 'invoices from last month',
     })
     @IsString()
-    query: string;
+    @IsOptional()
+    query?: string;
+
+    @ApiProperty({
+        description: 'The search query string (alias for query)',
+        example: 'web',
+        required: false
+    })
+    @IsString()
+    @IsOptional()
+    q?: string;
 
     @ApiProperty({
         description: 'Maximum number of results to return',

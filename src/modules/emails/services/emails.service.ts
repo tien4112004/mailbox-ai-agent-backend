@@ -222,6 +222,7 @@ export class EmailsService {
       pageToken,
       search,
       forceSync,
+      { isRead: dto.isRead, hasAttachment: dto.hasAttachment },
     );
 
     // Store next page token in cache
@@ -332,13 +333,14 @@ export class EmailsService {
     return this.normalizeEmailResponse(email, false);
   }
 
-  async sendEmail(userId: string, dto: SendEmailDto) {
+  async sendEmail(userId: string, dto: SendEmailDto, files?: any[]) {
     const provider = await this.emailProviderFactory.createProvider(userId);
 
     const result = await provider.sendEmail(
       dto.to,
       dto.subject,
       dto.body,
+      files,
       dto.cc,
       dto.bcc,
     );
@@ -370,6 +372,7 @@ export class EmailsService {
       to,
       subject,
       dto.body,
+      undefined, // files
       cc,
       undefined,
       `<${emailId}>`, // In-Reply-To
@@ -513,47 +516,47 @@ export class EmailsService {
 
     // Apply folder filter
     if (folder || criteria.folder) {
-      queryBuilder.andWhere('UPPER(email.folder) = UPPER(:folder)', { 
-        folder: criteria.folder || folder 
+      queryBuilder.andWhere('UPPER(email.folder) = UPPER(:folder)', {
+        folder: criteria.folder || folder
       });
     }
 
     // Apply from filter
     if (criteria.from?.length > 0) {
-      const fromConditions = criteria.from.map((email, idx) => 
+      const fromConditions = criteria.from.map((email, idx) =>
         `email.fromEmail ILIKE :from${idx}`
       ).join(' OR ');
-      queryBuilder.andWhere(`(${fromConditions})`, 
+      queryBuilder.andWhere(`(${fromConditions})`,
         Object.fromEntries(criteria.from.map((email, idx) => [`from${idx}`, `%${email}%`]))
       );
     }
 
     // Apply to filter
     if (criteria.to?.length > 0) {
-      const toConditions = criteria.to.map((email, idx) => 
+      const toConditions = criteria.to.map((email, idx) =>
         `email.toEmail::text ILIKE :to${idx}`
       ).join(' OR ');
-      queryBuilder.andWhere(`(${toConditions})`, 
+      queryBuilder.andWhere(`(${toConditions})`,
         Object.fromEntries(criteria.to.map((email, idx) => [`to${idx}`, `%${email}%`]))
       );
     }
 
     // Apply subject filter
     if (criteria.subject?.length > 0) {
-      const subjectConditions = criteria.subject.map((text, idx) => 
+      const subjectConditions = criteria.subject.map((text, idx) =>
         `email.subject ILIKE :subject${idx}`
       ).join(' AND ');
-      queryBuilder.andWhere(`(${subjectConditions})`, 
+      queryBuilder.andWhere(`(${subjectConditions})`,
         Object.fromEntries(criteria.subject.map((text, idx) => [`subject${idx}`, `%${text}%`]))
       );
     }
 
     // Apply contains filter (search in body and subject)
     if (criteria.contains?.length > 0) {
-      const containsConditions = criteria.contains.map((text, idx) => 
+      const containsConditions = criteria.contains.map((text, idx) =>
         `(email.subject ILIKE :contains${idx} OR email.body ILIKE :contains${idx})`
       ).join(' AND ');
-      queryBuilder.andWhere(`(${containsConditions})`, 
+      queryBuilder.andWhere(`(${containsConditions})`,
         Object.fromEntries(criteria.contains.map((text, idx) => [`contains${idx}`, `%${text}%`]))
       );
     }
@@ -619,8 +622,8 @@ export class EmailsService {
       .addSelect('email.from_name', 'name')
       .addSelect('COUNT(*)', 'count')
       .where('email.user_id = :userId', { userId })
-      .andWhere('(email.from_email ILIKE :query OR email.from_name ILIKE :query)', { 
-        query: `%${query}%` 
+      .andWhere('(email.from_email ILIKE :query OR email.from_name ILIKE :query)', {
+        query: `%${query}%`
       })
       .groupBy('email.from_email')
       .addGroupBy('email.from_name')

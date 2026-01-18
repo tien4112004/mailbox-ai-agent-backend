@@ -9,7 +9,7 @@ import { GeminiClient } from '../providers/gemini.client';
 export class EmailSearchService implements OnModuleInit {
   private readonly logger = new Logger(EmailSearchService.name);
 
-  constructor(private dataSource: DataSource, private configService: ConfigService) {}
+  constructor(private dataSource: DataSource, private configService: ConfigService) { }
 
   private semanticAvailable = false;
   private geminiClient?: GeminiClient;
@@ -17,8 +17,8 @@ export class EmailSearchService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     // Initialize Gemini client and check availability at startup so we can disable semantic search if model/key is invalid
-  const key = this.geminiApiKey;
-  const model = EmailSearchService.GEMINI_MODEL;
+    const key = this.geminiApiKey;
+    const model = EmailSearchService.GEMINI_MODEL;
     if (!key) {
       this.logger.warn('Gemini API key not configured; disabling semantic search');
       this.semanticAvailable = false;
@@ -40,10 +40,12 @@ export class EmailSearchService implements OnModuleInit {
 
     // If semantic search is available, start background indexing of missing embeddings
     if (this.semanticAvailable) {
-      // run in background, do not block startup
-      this.indexAllMissingEmbeddingsInBackground().catch((err) => {
-        this.logger.warn('Background embedding indexing failed to start: ' + (err as Error).message);
-      });
+      // run in background, do not block startup, add 10s delay to let server stabilize
+      setTimeout(() => {
+        this.indexAllMissingEmbeddingsInBackground().catch((err) => {
+          this.logger.warn('Background embedding indexing failed to start: ' + (err as Error).message);
+        });
+      }, 10000);
     }
   }
 
@@ -53,7 +55,7 @@ export class EmailSearchService implements OnModuleInit {
    */
   private async indexAllMissingEmbeddingsInBackground(): Promise<void> {
     try {
-      this.logger.log('Starting background job to index missing embeddings for users');
+      this.logger.log('Starting background job to index missing embeddings for users (delayed)');
       const rows: Array<{ user_id: string }> = await this.dataSource.query(
         `SELECT DISTINCT user_id FROM emails WHERE embedding IS NULL`,
       );
@@ -67,8 +69,12 @@ export class EmailSearchService implements OnModuleInit {
         const userId = r.user_id;
         // Fire-and-forget per user but await sequentially to avoid overwhelming the API
         try {
-          const count = await this.indexMissingEmbeddings(userId, 100);
+          // Reduce limit to 50 to process smaller batches at a time
+          const count = await this.indexMissingEmbeddings(userId, 50);
           this.logger.log(`Indexed up to ${count} missing embeddings for user ${userId}`);
+
+          // Add pause between users
+          await new Promise(resolve => setTimeout(resolve, 2000));
         } catch (err) {
           this.logger.warn(`Failed to index embeddings for user ${userId}: ${(err as Error).message}`);
         }
@@ -81,8 +87,8 @@ export class EmailSearchService implements OnModuleInit {
   }
 
   private async checkGeminiModelAvailability(): Promise<boolean> {
-  const key = this.geminiApiKey;
-  const model = EmailSearchService.GEMINI_MODEL;
+    const key = this.geminiApiKey;
+    const model = EmailSearchService.GEMINI_MODEL;
     if (!key) {
       this.logger.warn('Gemini API key not configured; disabling semantic search');
       this.semanticAvailable = false;
@@ -170,7 +176,8 @@ export class EmailSearchService implements OnModuleInit {
     if (!rows || rows.length === 0) return 0;
 
     // Batch embedding to reduce API calls and cost. Gemini supports multiple contents in one request.
-    const chunkSize = 10; // number of texts per embed API call
+    // Reduced chunk size to prevent 429 Resource Exhausted on free tier
+    const chunkSize = 10;
     let processed = 0;
 
     for (let i = 0; i < rows.length; i += chunkSize) {
@@ -320,7 +327,7 @@ export class EmailSearchService implements OnModuleInit {
       this.logger.warn(`Trigram searches failed: ${(err as Error).message}`);
     }
 
-  if (this.semanticAvailable) {
+    if (this.semanticAvailable) {
       try {
         const semRes = await this.semanticSearch(userId, query, limit * 2);
         for (const r of semRes.results) {
@@ -504,8 +511,8 @@ export class EmailSearchService implements OnModuleInit {
           LIMIT $4
         `;
 
-  // Do not include raw query text in logs
-  this.logger.debug(`Executing trigram search SQL for user ${userId}`);
+        // Do not include raw query text in logs
+        this.logger.debug(`Executing trigram search SQL for user ${userId}`);
 
         results = await this.dataSource.query(sql, [
           query,

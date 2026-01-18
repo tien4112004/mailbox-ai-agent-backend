@@ -41,9 +41,9 @@ export class SmtpProviderAdapter implements EmailProvider {
     return this.imapService.listMailboxes(this.config.imap);
   }
 
-  async listEmails(folder: string, limit: number, pageToken?: string, search?: string, forceSync: boolean = false) {
+  async listEmails(folder: string, limit: number, pageToken?: string, search?: string, forceSync: boolean = false, filters?: { isRead?: boolean, hasAttachment?: boolean }) {
     const page = pageToken ? parseInt(pageToken.replace('page-', '')) : 1;
-    
+
     // If not forcing sync, try to get from database first
     if (!forceSync) {
       try {
@@ -59,6 +59,16 @@ export class SmtpProviderAdapter implements EmailProvider {
             '(email.subject ILIKE :search OR email.fromEmail ILIKE :search OR email.fromName ILIKE :search OR email.body ILIKE :search)',
             { search: `%${search}%` }
           );
+        }
+
+        // Apply filters
+        if (filters) {
+          if (filters.isRead !== undefined) {
+            queryBuilder.andWhere('email.read = :isRead', { isRead: filters.isRead });
+          }
+          if (filters.hasAttachment) {
+            queryBuilder.andWhere('jsonb_array_length(email.attachments) > 0');
+          }
         }
 
         const [dbEmails, total] = await queryBuilder
@@ -79,7 +89,7 @@ export class SmtpProviderAdapter implements EmailProvider {
         this.logger.error('Error querying database, falling back to SMTP fetch:', error?.stack || error);
       }
     }
-    
+
     // Step 1: Fetch emails from SMTP/IMAP (on first load or force sync)
     const result = await this.imapService.listEmails(
       this.config.imap,
@@ -93,7 +103,7 @@ export class SmtpProviderAdapter implements EmailProvider {
     if (this.persistEmailsCallback && result.emails && result.emails.length > 0) {
       try {
         const savedEmails = await this.persistEmailsCallback(this.userId, result.emails);
-        
+
         // Step 3: Return the saved emails from database instead of raw IMAP emails
         return {
           emails: savedEmails.map(email => this.formatEmailResponse(email)),
@@ -165,12 +175,14 @@ export class SmtpProviderAdapter implements EmailProvider {
     to: string[],
     subject: string,
     body: string,
+    files?: any[],
     cc?: string[],
     bcc?: string[],
     inReplyTo?: string,
     references?: string,
   ) {
     const referencesArray = references ? [references] : undefined;
+    // TODO: support files in SMTP service
     return this.smtpService.sendEmail(
       this.config.smtp,
       this.config.emailAddress,

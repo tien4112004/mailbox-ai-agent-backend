@@ -3,7 +3,7 @@ import { IsOptional, IsString, IsInt, Min, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class AdvancedSearchDto {
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'from:john@example.com subject:meeting has:attachment',
     description: 'Search query with criteria. Supports: from:, to:, subject:, contains:, has:attachment, is:read, is:unread, is:starred, folder:'
   })
@@ -37,17 +37,39 @@ export class AdvancedSearchDto {
 }
 
 export class SuggestionQueryDto {
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'john',
     description: 'Partial text to search for suggestions'
   })
   @IsString()
   query: string;
 
-  @ApiPropertyOptional({ example: 10, description: 'Maximum number of suggestions' })
+  @IsInt()
+  @Min(1)
+  limit?: number = 10;
+}
+
+export class FuzzySearchDto {
+  @ApiProperty({
+    name: 'q',
+    example: 'web',
+    description: 'Search query text'
+  })
+  @IsString()
+  q: string;
+
+  @ApiPropertyOptional({
+    example: 'subject,from_email',
+    description: 'Comma-separated fields to search in (subject, from_email, body)'
+  })
+  @IsOptional()
+  @IsString()
+  fields?: string;
+
+  @ApiPropertyOptional({ example: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  limit?: number = 10;
+  limit?: number = 20;
 }

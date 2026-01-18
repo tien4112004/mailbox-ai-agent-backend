@@ -8,8 +8,15 @@ import helmet from 'helmet';
 import * as compression from 'compression';
 import { validationExceptionFactory } from './common/filters/validation-exception.filter';
 
+import * as express from 'express';
+
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Disable default bodyParser to allow configuring strict: false
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+
+  // Manually configure lenient body parser to allow 'null', primitives etc.
+  app.use(express.json({ strict: false }));
+  app.use(express.urlencoded({ extended: true }));
 
   // Security - Configure helmet with relaxed COOP for Google OAuth
   app.use(

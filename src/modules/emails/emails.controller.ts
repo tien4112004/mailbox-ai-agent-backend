@@ -13,7 +13,11 @@ import {
   Put,
   Delete,
   HttpCode,
+  UseInterceptors,
+  UploadedFiles,
+  BadRequestException,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { Response } from 'express';
 import { EmailsService, SnoozeService, SummaryService, KanbanService, KanbanFilterSortService } from './services';
@@ -28,7 +32,7 @@ import { SnoozeEmailDto } from './dto/snooze-email.dto';
 import { SummarizeEmailDto } from './dto/summarize-email.dto';
 import { CreateKanbanColumnDto } from './dto/create-kanban-column.dto';
 import { MoveCardDto } from './dto/move-card.dto';
-import { AdvancedSearchDto, SuggestionQueryDto } from './dto/advanced-search.dto';
+import { AdvancedSearchDto, SuggestionQueryDto, FuzzySearchDto } from './dto/advanced-search.dto';
 import { KanbanFilterSortDto } from './dto/kanban-filter-sort.dto';
 import { CreateSmtpConfigDto } from './dto/create-smtp-config.dto';
 import { UpdateSmtpConfigDto } from './dto/update-smtp-config.dto';
@@ -210,8 +214,10 @@ export class EmailsController {
 
   // NOTE: moved getEmailById below to avoid route collision with static routes like '/search'
 
+
+
   @Post('send')
-  @ApiOperation({ summary: 'Send a new email' })
+  @ApiOperation({ summary: 'Send a new email with optional attachments' })
   @ApiResponse({
     status: 200,
     description: 'Email sent successfully',
@@ -223,8 +229,41 @@ export class EmailsController {
       }
     }
   })
-  async sendEmail(@Request() req, @Body() dto: SendEmailDto) {
-    return this.emailsService.sendEmail(req.user.id, dto);
+  @UseInterceptors(FilesInterceptor('files'))
+  async sendEmail(
+    @Request() req,
+    @Body() body: any,
+    @UploadedFiles() files: any,
+  ) {
+    // When using multipart/form-data, non-file fields arrive as strings.
+    // If 'to', 'cc', 'bcc' were sent as JSON strings or individual fields, handle carefully.
+    // Assuming simple form submission or FormData from frontend:
+    // If 'to' is '["a@b.com"]' (stringified JSON) or just 'a@b.com'.
+
+    const parseRecipients = (val: any): string[] => {
+      if (!val) return [];
+      if (Array.isArray(val)) return val;
+      if (typeof val === 'string') {
+        try {
+          const parsed = JSON.parse(val);
+          if (Array.isArray(parsed)) return parsed;
+        } catch {
+          // If not JSON, split by comma
+          return val.split(',').map(s => s.trim());
+        }
+      }
+      return [val];
+    };
+
+    const dto: SendEmailDto = {
+      to: parseRecipients(body.to),
+      subject: body.subject,
+      body: body.body,
+      cc: parseRecipients(body.cc),
+      bcc: parseRecipients(body.bcc),
+    };
+
+    return this.emailsService.sendEmail(req.user.id, dto, files);
   }
 
   @Post(':id/reply')
@@ -273,6 +312,8 @@ export class EmailsController {
     @Request() req,
     @Param('messageId') messageId: string,
     @Param('attachmentId') attachmentId: string,
+    @Query('filename') filename: string,
+    @Query('mimeType') mimeType: string,
     @Res() res: Response,
   ) {
     const attachment = await this.emailsService.getAttachment(
@@ -287,8 +328,19 @@ export class EmailsController {
       'base64',
     );
 
-    res.setHeader('Content-Type', 'application/octet-stream');
+    // Set correct MIME type if provided, otherwise default to generic binary
+    res.setHeader('Content-Type', mimeType || 'application/octet-stream');
     res.setHeader('Content-Length', buffer.length);
+
+    // Set Content-Disposition to force download with correct filename if provided
+    if (filename) {
+      // Clean filename to prevent header injection or encoding issues
+      const safeFilename = encodeURIComponent(filename).replace(/['()]/g, escape);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${safeFilename}`);
+    } else {
+      res.setHeader('Content-Disposition', 'attachment');
+    }
+
     res.status(HttpStatus.OK).send(buffer);
   }
 
@@ -685,17 +737,30 @@ export class EmailsController {
   @ApiResponse({ status: 400, description: 'Invalid search parameters' })
   async search(
     @Request() req,
-    @Query('query') query: string,
+    @Query() dto: FuzzySearchDto,
   ) {
     // Modified to use only fuzzy search as requested
-    const result = await this.searchService.fuzzySearchEmails(req.user.id, { query });
+    const result = await this.searchService.fuzzySearchEmails(req.user.id, {
+      query: dto.q,
+      fields: dto.fields,
+      limit: dto.limit,
+    });
 
     // Return only normalized email objects (no similarity/sources/metadata) as requested
     const emails = result.results.map((r) =>
       this.emailsService.normalizeEmailResponse(r, true),
     );
 
-    return emails;
+    return {
+      emails,
+      pagination: {
+        total: emails.length,
+        page: 1,
+        limit: dto.limit || 20,
+        totalPages: 1,
+        nextPageToken: null,
+      },
+    };
   }
 
   @Get('search/semantic')
@@ -722,33 +787,130 @@ export class EmailsController {
     @Query() dto: SemanticSearchDto,
   ) {
     const userId = req.user.id;
-    const { query, limit = 10 } = dto;
+    const { query, q, limit = 10 } = dto;
+    const finalQuery = q || query;
 
-    const result = await this.searchService.semanticSearch(userId, query, limit);
+    if (!finalQuery) {
+      throw new BadRequestException('Query parameter "q" or "query" is required');
+    }
 
-    // Normalize and format results (return standard Email[] to match other search endpoints)
-    return result.results.map(email =>
+    const result = await this.searchService.semanticSearch(userId, finalQuery, limit);
+
+    const emails = result.results.map(email =>
       this.emailsService.normalizeEmailResponse(email, true)
     );
+    return {
+      emails,
+      pagination: {
+        total: emails.length,
+        page: 1,
+        limit,
+        totalPages: 1,
+        nextPageToken: null
+      }
+    };
   }
 
-  // Compatibility endpoint: old frontend may still call POST /api/emails/search/fuzzy
-  // This maps to the unified search logic so behavior matches the new API.
+  // Compatibility endpoint: allow POST for semantic
+  @Post('search/semantic')
+  @ApiOperation({ summary: 'Perform semantic search on emails (Legacy POST)' })
+  @ApiResponse({ status: 200, description: 'Semantic search results retrieved' })
+  async legacySemanticSearch(
+    @Request() req,
+    @Body() body: any,
+    @Query() queryDto: SemanticSearchDto,
+  ) {
+    const userId = req.user.id;
+    // Support both body and query params
+    const q = body?.q || body?.query || queryDto.q || queryDto.query;
+    const limit = body?.limit || queryDto.limit || 10;
+
+    if (!q) {
+      throw new BadRequestException('Query parameter "q" (or body.q/query) is required');
+    }
+
+    const result = await this.searchService.semanticSearch(userId, q, limit);
+
+    const emails = result.results.map(email =>
+      this.emailsService.normalizeEmailResponse(email, true)
+    );
+    return {
+      emails,
+      pagination: {
+        total: emails.length,
+        page: 1,
+        limit,
+        totalPages: 1,
+        nextPageToken: null
+      }
+    };
+  }
+
+  @Get('search/fuzzy')
+  @ApiOperation({ summary: 'Fuzzy search emails' })
+  @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
+  async fuzzySearch(
+    @Request() req,
+    @Query() dto: FuzzySearchDto,
+  ) {
+    if (!dto.q) {
+      throw new BadRequestException('Query parameter "q" is required');
+    }
+
+    const result = await this.searchService.fuzzySearchEmails(req.user.id, {
+      query: dto.q,
+      fields: dto.fields,
+      limit: dto.limit,
+    });
+
+    const emails = result.results.map((r) => this.emailsService.normalizeEmailResponse(r, true));
+    return {
+      emails,
+      pagination: {
+        total: emails.length,
+        page: 1,
+        limit: dto.limit || 20,
+        totalPages: 1,
+        nextPageToken: null
+      }
+    };
+  }
+
+  // Compatibility endpoint: allow POST but read from query params if body is missing/empty
   @Post('search/fuzzy')
-  @ApiOperation({ summary: 'Compatibility: fuzzy search (legacy) mapped to unified search' })
+  @ApiOperation({ summary: 'Fuzzy search emails (Legacy POST)' })
   @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
   async legacyFuzzySearch(
     @Request() req,
-    @Body() body: { query?: string; limit?: number },
+    @Body() body: any,
+    @Query() queryDto: FuzzySearchDto,
   ) {
-    const query = body?.query?.trim();
-    if (!query) {
-      throw new Error('Query parameter "query" is required');
+    // Support both body and query params
+    const q = body?.q || body?.query || queryDto.q;
+    const fields = body?.fields || queryDto.fields;
+    const limit = body?.limit || queryDto.limit;
+
+    if (!q) {
+      throw new BadRequestException('Query parameter "q" (or body.q/query) is required');
     }
 
-    const combined = await this.searchService.combinedSearch(req.user.id, query, body?.limit);
-    const emails = combined.results.map((r) => this.emailsService.normalizeEmailResponse(r, true));
-    return emails;
+    const result = await this.searchService.fuzzySearchEmails(req.user.id, {
+      query: q,
+      fields: fields,
+      limit: limit,
+    });
+
+    const emails = result.results.map((r) => this.emailsService.normalizeEmailResponse(r, true));
+    return {
+      emails,
+      pagination: {
+        total: emails.length,
+        page: 1,
+        limit: limit,
+        totalPages: 1,
+        nextPageToken: null
+      }
+    };
   }
 
   // Compatibility: field-specific fuzzy search (legacy)
@@ -781,7 +943,16 @@ export class EmailsController {
     );
 
     const emails = res.results.map((r) => this.emailsService.normalizeEmailResponse(r, true));
-    return emails;
+    return {
+      emails,
+      pagination: {
+        total: emails.length,
+        page: 1,
+        limit: parsedLimit,
+        totalPages: 1,
+        nextPageToken: null
+      }
+    };
   }
 
   @Get(':id')

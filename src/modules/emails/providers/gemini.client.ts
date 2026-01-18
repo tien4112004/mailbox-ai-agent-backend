@@ -44,7 +44,7 @@ export class GeminiClient {
 
       if (found) return found;
 
-  this.logger.error('No embedding found in Gemini response', JSON.stringify(response));
+      this.logger.error('No embedding found in Gemini response', JSON.stringify(response));
       throw new Error('No embedding returned from Gemini SDK');
     } catch (err) {
       this.logger.error('Gemini embed error', err as any);
@@ -54,65 +54,89 @@ export class GeminiClient {
 
   async embedMany(texts: string[]): Promise<number[][]> {
     if (!Array.isArray(texts) || texts.length === 0) return [];
+
     try {
+      // Use batchEmbedContents if available (preferred for batching)
+      // This is the correct method for the new Google GenAI SDK to handle multiple requests in one go
+      // Limit is typically 100 requests per batch call, which matches our planned chunkSize
+
       let response: any;
-      if (this.ai?.gemini?.embedContent) {
-        response = await this.ai.gemini.embedContent({ model: this.model, contents: texts });
-      } else if (this.ai?.models?.embedContent) {
-        response = await this.ai.models.embedContent({ model: this.model, contents: texts });
-      } else if (typeof this.ai?.embedContent === 'function') {
-        response = await this.ai.embedContent({ model: this.model, contents: texts });
+      const requests = texts.map(t => ({ content: { parts: [{ text: t }] }, model: `models/${this.model}` }));
+
+      // Try accessing the batch method on the model instance (if using getGenerativeModel) or via client
+      // The SDK structure can vary, but usually it's on the client or model
+      // Based on docs for @google/genai, we might need to use `client.batchEmbedContents`
+
+      // Attempt 1: Check if ai.batchEmbedContents exists (newer SDKs)
+      if (typeof this.ai.batchEmbedContents === 'function') {
+        response = await this.ai.batchEmbedContents({ requests });
+      }
+      // Attempt 2: gemini.batchEmbedContents
+      else if (this.ai?.gemini?.batchEmbedContents) {
+        response = await this.ai.gemini.batchEmbedContents({ requests });
+      }
+      // Attempt 3: models.batchEmbedContents (older)
+      else if (this.ai?.models?.batchEmbedContents) {
+        response = await this.ai.models.batchEmbedContents({ requests });
       } else {
-        throw new Error('Gemini SDK does not expose embedContent method');
+        // Fallback to serial execution if batch method not found
+        this.logger.warn('Gemini SDK batchEmbedContents not found, falling back to serial');
+        return this.embedSequential(texts);
       }
 
-      // Parse embeddings from response - expect an array of embeddings
+      // Parse response. The structure is usually { embeddings: [ { values: [...] }, ... ] }
+      // but let's be robust
+
       const embeddings: number[][] = [];
+      const rawEmbeddings = response?.embeddings || response?.data || [];
 
-      // Try known shapes
-      if (response?.embeddings && Array.isArray(response.embeddings)) {
-        for (const e of response.embeddings) {
-          const emb = e?.embedding || e?.vector || null;
-          if (Array.isArray(emb)) embeddings.push(emb as number[]);
+      if (Array.isArray(rawEmbeddings)) {
+        for (const item of rawEmbeddings) {
+          const values = item?.values || item?.embedding || null;
+          if (Array.isArray(values)) {
+            embeddings.push(values as number[]);
+          } else {
+            embeddings.push([]); // Keep index alignment even if empty/error
+          }
         }
-        if (embeddings.length) return embeddings;
       }
 
-      if (response?.data && Array.isArray(response.data)) {
-        for (const d of response.data) {
-          const emb = d?.embedding || d?.outputs?.[0]?.embedding || null;
-          if (Array.isArray(emb)) embeddings.push(emb as number[]);
-        }
-        if (embeddings.length) return embeddings;
+      if (embeddings.length !== texts.length) {
+        this.logger.warn(`Gemini batch embedding returned ${embeddings.length} items, expected ${texts.length}`);
       }
 
-      // Fallback: scan any nested arrays for numeric arrays matching number[] length
-      const foundAll: number[][] = [];
-      const visit = (obj: any) => {
-        if (!obj || typeof obj !== 'object') return null;
-        if (Array.isArray(obj) && obj.length > 0 && typeof obj[0] === 'number') return obj as number[];
-        for (const k of Object.keys(obj)) {
-          const v = obj[k];
-          const r = visit(v);
-          if (r) return r;
-        }
-        return null;
-      };
+      return embeddings;
 
-      // Try to extract up to texts.length embeddings scanning response
-      const flat = JSON.stringify(response);
-      // worst-case, fallback to per-item embed by calling embed for each text
-      this.logger.debug('Falling back to per-item embedding for embedMany');
-      const results: number[][] = [];
-      for (const t of texts) {
-        const emb = await this.embed(t);
-        results.push(emb);
-      }
-      return results;
     } catch (err) {
       this.logger.error('Gemini embedMany error', err as any);
-      throw err;
+      // Fallback to serial on error (e.g. if batch failed totally)
+      try {
+        return this.embedSequential(texts);
+      } catch (serialErr) {
+        throw serialErr;
+      }
     }
+  }
+
+  private async embedSequential(texts: string[]): Promise<number[][]> {
+    const results: number[][] = [];
+    for (const text of texts) {
+      try {
+        const emb = await this.embed(text);
+        results.push(emb);
+        // Rate limit: 1 request every 4 seconds (safe for 15 RPM)
+        await new Promise(resolve => setTimeout(resolve, 4000));
+      } catch (err) {
+        const msg = (err as any)?.message || JSON.stringify(err);
+        if (msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
+          // Critical error: Stop immediately and propagate to caller
+          throw err;
+        }
+        this.logger.warn(`Failed to embed text in sequential mode: ${msg}`);
+        results.push([]); // Keep alignment for non-critical errors
+      }
+    }
+    return results;
   }
 
   async checkModelAvailability(): Promise<boolean> {

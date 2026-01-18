@@ -37,4 +37,16 @@ export class GetEmailsDto {
   @Type(() => Boolean)
   @IsBoolean()
   forceSync?: boolean = false;
+
+  @ApiPropertyOptional({ example: false, description: 'Filter by read status (true=read, false=unread)' })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isRead?: boolean;
+
+  @ApiPropertyOptional({ example: true, description: 'Filter by attachment presence' })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  hasAttachment?: boolean;
 }

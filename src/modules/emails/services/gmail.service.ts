@@ -96,11 +96,11 @@ export class GmailService {
       });
 
       const labels = response.data.labels || [];
-      
+
       // Map Gmail labels to our mailbox format
       return labels
-        .filter((label) => 
-          label.type === 'system' || 
+        .filter((label) =>
+          label.type === 'system' ||
           (label.labelListVisibility === 'labelShow' && label.name)
         )
         .map((label) => ({
@@ -129,7 +129,7 @@ export class GmailService {
   ) {
     try {
       const gmail = this.getGmailClient(accessToken, refreshToken);
-      
+
       const listParams: any = {
         userId: 'me',
         maxResults,
@@ -145,9 +145,9 @@ export class GmailService {
       }
 
       const response = await gmail.users.messages.list(listParams);
-      
+
       const messages = response.data.messages || [];
-      
+
       // Fetch full details for each message
       const emailPromises = messages.map((msg) =>
         this.getEmailById(accessToken, refreshToken, msg.id),
@@ -190,7 +190,7 @@ export class GmailService {
       const headers = message.payload?.headers || [];
 
       // Extract header values
-      const getHeader = (name: string) => 
+      const getHeader = (name: string) =>
         headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
 
       const subject = getHeader('Subject');
@@ -202,7 +202,7 @@ export class GmailService {
 
       // Parse email body
       const { htmlBody, textBody } = this.extractBody(message.payload);
-      
+
       // Extract attachments
       const attachments = this.extractAttachments(message.payload);
 
@@ -257,7 +257,7 @@ export class GmailService {
     if (payload.body?.data) {
       const mimeType = payload.mimeType;
       const decodedData = this.decodeBase64(payload.body.data);
-      
+
       if (mimeType === 'text/html') {
         htmlBody = decodedData;
       } else if (mimeType === 'text/plain') {
@@ -304,7 +304,7 @@ export class GmailService {
             size: part.body.size,
           });
         }
-        
+
         if (part.parts) {
           extractFromParts(part.parts);
         }
@@ -326,7 +326,7 @@ export class GmailService {
   ) {
     try {
       const gmail = this.getGmailClient(accessToken, refreshToken);
-      
+
       const response = await gmail.users.messages.attachments.get({
         userId: 'me',
         messageId,
@@ -352,6 +352,7 @@ export class GmailService {
     to: string[],
     subject: string,
     body: string,
+    files?: any[],
     cc?: string[],
     bcc?: string[],
     inReplyTo?: string,
@@ -360,21 +361,27 @@ export class GmailService {
     try {
       const gmail = this.getGmailClient(accessToken, refreshToken);
 
-      // Create email message
-      const messageParts = [
-        `To: ${to.join(', ')}`,
-        ...(cc && cc.length ? [`Cc: ${cc.join(', ')}`] : []),
-        ...(bcc && bcc.length ? [`Bcc: ${bcc.join(', ')}`] : []),
-        `Subject: ${subject}`,
-        'Content-Type: text/html; charset=utf-8',
-        ...(inReplyTo ? [`In-Reply-To: ${inReplyTo}`] : []),
-        ...(references ? [`References: ${references}`] : []),
-        '',
-        body,
-      ];
+      const MailComposer = require('nodemailer/lib/mail-composer');
 
-      const message = messageParts.join('\n');
-      const encodedMessage = Buffer.from(message)
+      const mailOptions = {
+        to: to.join(', '),
+        subject: subject,
+        html: body,
+        cc: cc?.join(', '),
+        bcc: bcc?.join(', '),
+        inReplyTo: inReplyTo,
+        references: references,
+        attachments: files?.map((file) => ({
+          filename: file.originalname,
+          content: file.buffer,
+          contentType: file.mimetype,
+        })),
+      };
+
+      const mail = new MailComposer(mailOptions);
+      const message = await mail.compile().build(); // Build raw MIME buffer
+
+      const encodedMessage = message
         .toString('base64')
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
@@ -482,7 +489,7 @@ export class GmailService {
 
     // Match "Name <email@example.com>" or just "email@example.com"
     const match = address.match(/^(?:"?([^"]*)"?\s)?<?([^>]+)>?$/);
-    
+
     if (match) {
       return {
         name: match[1]?.trim() || match[2]?.split('@')[0] || '',
@@ -501,7 +508,7 @@ export class GmailService {
    */
   private parseEmailAddresses(addresses: string): string[] {
     if (!addresses) return [];
-    
+
     return addresses
       .split(',')
       .map((addr) => addr.trim())
@@ -514,7 +521,7 @@ export class GmailService {
   async getUserProfile(accessToken: string, refreshToken: string) {
     try {
       const gmail = this.getGmailClient(accessToken, refreshToken);
-      
+
       const response = await gmail.users.getProfile({
         userId: 'me',
       });
