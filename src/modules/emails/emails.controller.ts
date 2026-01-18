@@ -429,6 +429,7 @@ export class EmailsController {
     @Body() dto: SnoozeEmailDto,
   ) {
     // Extract email ID from Gmail message ID (simplified approach)
+    // The service handles resolving the real DB UUID if needed
     const emailId = gmailMessageId;
     return this.snoozeService.snoozeEmail(
       req.user.id,

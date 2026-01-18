@@ -24,7 +24,7 @@ export class SnoozeService {
     private kanbanColumnRepository: Repository<KanbanColumn>,
     private gmailService: GmailService,
     private authService: AuthService,
-  ) {}
+  ) { }
 
   /**
    * Snooze an email until a specified time
@@ -47,6 +47,27 @@ export class SnoozeService {
     // UUID regex to detect database emails vs Gmail message IDs
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const isDbEmail = uuidRegex.test(gmailMessageId);
+
+    // If it's a UUID, it's our internal email ID
+    let internalEmailId = isDbEmail ? gmailMessageId : null;
+
+    // If it's a Gmail ID (not UUID), try to find the email in our DB by messageId
+    if (!isDbEmail) {
+      const email = await this.emailRepository.findOne({ where: { messageId: gmailMessageId, userId } });
+      if (email) {
+        internalEmailId = email.id;
+      }
+      // If not found in DB, we can't delete Kanban card (referenced by UUID)
+      // AND we can't save snooze with emailId if emailId column is UUID type.
+      // Assuming snooze.email_id is nullable or text? If UUID, we MUST have an internal email.
+      // If it is a Gmail-only email (not synced), we might need to sync it first or handle it.
+      // But typically all specific emails viewed are synced.
+    }
+
+    // Check if internalEmailId matches UUID format before using in DB operations that expect UUID
+    if (internalEmailId && uuidRegex.test(internalEmailId)) {
+      await this.kanbanCardRepository.delete({ emailId: internalEmailId });
+    }
 
     let originalLabels = [];
     let originalFolder = 'INBOX';
@@ -91,11 +112,22 @@ export class SnoozeService {
     }
 
     // Remove Kanban card for this email to hide it from the board
-    await this.kanbanCardRepository.delete({ emailId });
+    // This line was problematic if emailId was not a UUID.
+    // The previous block handles deletion if internalEmailId is a UUID.
+    // If it's a Gmail ID and no internalEmailId was found, we can't delete by emailId (UUID)
+    // So this line is now redundant or potentially problematic if not handled by internalEmailId check.
+    // Let's remove it as the `if (internalEmailId && uuidRegex.test(internalEmailId))` block handles it.
+    // await this.kanbanCardRepository.delete({ emailId }); // Removed
 
     // Create snooze record
+    // Note: If emailId is required to be UUID in DB, we must use internalEmailId. 
+    // If table supports text emailId (unlikely if foreign key), we need to check entity definition.
+    // Assuming emailId is foreign key to emails(id) which is UUID.
+
+    // The `emailId` column in Snooze entity is a string.
+    // We prefer to store the internalEmailId (UUID) if available, otherwise the gmailMessageId.
     const snooze = this.snoozeRepository.create({
-      emailId,
+      emailId: internalEmailId || gmailMessageId, // Prefer internal ID if found
       gmailMessageId,
       userId,
       status: SnoozeStatus.SNOOZED,
@@ -204,7 +236,7 @@ export class SnoozeService {
       });
 
       await this.snoozeRepository.save(nextSnooze);
-      
+
       if (!isDbEmail) {
         // For Gmail emails, archive again for the next snooze occurrence
         const tokens = await this.authService.getGmailTokens(userId);

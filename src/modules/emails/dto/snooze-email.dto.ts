@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateString, IsOptional, IsString, IsBoolean, IsIn } from 'class-validator';
+import { Expose } from 'class-transformer';
 
 export class SnoozeEmailDto {
   @ApiProperty({
@@ -12,9 +13,11 @@ export class SnoozeEmailDto {
   @ApiPropertyOptional({
     description: 'Reason for snoozing the email',
     example: 'Follow up later',
+    name: 'reason'
   })
   @IsOptional()
   @IsString()
+  @Expose({ name: 'reason' })
   snoozeReason?: string;
 
   @ApiPropertyOptional({
