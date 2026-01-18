@@ -182,7 +182,14 @@ export class SmtpProviderAdapter implements EmailProvider {
     references?: string,
   ) {
     const referencesArray = references ? [references] : undefined;
-    // TODO: support files in SMTP service
+
+    // Map files to attachments format expected by SmtpService
+    const attachments = files?.map(file => ({
+      filename: file.originalname,
+      content: file.buffer,
+      contentType: file.mimetype,
+    }));
+
     return this.smtpService.sendEmail(
       this.config.smtp,
       this.config.emailAddress,
@@ -193,6 +200,7 @@ export class SmtpProviderAdapter implements EmailProvider {
       bcc,
       inReplyTo,
       referencesArray,
+      attachments,
     );
   }
 

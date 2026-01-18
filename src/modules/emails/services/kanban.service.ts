@@ -22,7 +22,7 @@ export class KanbanService {
     private emailRepository: Repository<Email>,
     private gmailService: GmailService, // Inject GmailService
     private authService: AuthService,   // Inject AuthService
-  ) {}
+  ) { }
 
   /**
    * Initialize default Kanban columns for a user
@@ -92,23 +92,23 @@ export class KanbanService {
       color: col.color,
       cards: col.cards
         ? col.cards.map((card) => ({
-            id: card.id,
-            emailId: card.emailId,
-            columnId: card.columnId,
-            order: card.order,
-            notes: card.notes,
-            email: card.email
-              ? {
-                  id: card.email.id,
-                  subject: card.email.subject,
-                  preview: card.email.preview,
-                  fromName: card.email.fromName,
-                  fromEmail: card.email.fromEmail,
-                  read: card.email.read,
-                  starred: card.email.starred,
-                }
-              : null,
-          }))
+          id: card.id,
+          emailId: card.emailId,
+          columnId: card.columnId,
+          order: card.order,
+          notes: card.notes,
+          email: card.email
+            ? {
+              id: card.email.id,
+              subject: card.email.subject,
+              preview: card.email.preview,
+              fromName: card.email.fromName,
+              fromEmail: card.email.fromEmail,
+              read: card.email.read,
+              starred: card.email.starred,
+            }
+            : null,
+        }))
         : [],
     }));
   }
@@ -398,13 +398,13 @@ export class KanbanService {
 
     const saved = await this.kanbanCardRepository.save(card);
 
-    // Apply label changes in Gmail if necessary (don't block operation on failure)
-    try {
-      const emailEntity = await this.emailRepository.findOne({ where: { id: emailId } });
-      await this.applyLabelOnMove(userId, emailEntity, fromColumn, toColumn);
-    } catch (err) {
-      this.logger.error('Failed to apply label changes on move:', err?.message || err);
-    }
+    // Apply label changes in Gmail if necessary (run in background, don't block response)
+    // We execute this asynchronously so the user gets immediate feedback
+    this.emailRepository.findOne({ where: { id: emailId } })
+      .then((emailEntity) => this.applyLabelOnMove(userId, emailEntity, fromColumn, toColumn))
+      .catch((err) => {
+        this.logger.error('Failed to apply label changes on move (background):', err?.message || err);
+      });
 
     return saved;
   }

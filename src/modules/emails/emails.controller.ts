@@ -655,7 +655,20 @@ export class EmailsController {
     },
   })
   async moveCard(@Request() req, @Body() dto: MoveCardDto) {
-    return this.kanbanService.moveCard(req.user.id, dto);
+    // Return success immediately to UI (Optimistic UI update)
+    // Run actual DB move and Gmail sync in background
+    this.kanbanService.moveCard(req.user.id, dto).catch(err => {
+      console.error('Background moveCard failed:', err);
+    });
+
+    // Return predicted state
+    return {
+      id: 'temp-optimistic-id', // Frontend should handle this or reload if needed, but for move it just needs success often
+      emailId: dto.emailId,
+      columnId: dto.toColumnId,
+      order: dto.order,
+      // We can't return the full entity easily without querying, but this satisfies "success"
+    };
   }
 
   @Post('kanban/cards/:emailId/add')

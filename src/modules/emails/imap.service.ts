@@ -87,7 +87,7 @@ export class ImapService {
       await this.connectImap(imap);
 
       const boxes = await promisify(imap.getBoxes.bind(imap))();
-      
+
       const mailboxes = this.flattenBoxes(boxes);
 
       imap.end();
@@ -117,7 +117,13 @@ export class ImapService {
 
     for (const [name, box] of Object.entries(boxes)) {
       const path = parent ? `${parent}/${name}` : name;
-      result.push({ name, path });
+
+      // Check for \Noselect attribute (common for [Gmail] root folder)
+      const isNoselect = box.attribs && box.attribs.some(attr => attr.toUpperCase() === '\\NOSELECT');
+
+      if (!isNoselect) {
+        result.push({ name, path });
+      }
 
       if (box.children) {
         result.push(...this.flattenBoxes(box.children, path));
@@ -164,17 +170,17 @@ export class ImapService {
       }
 
       const uids = await this.searchMessages(imap, searchCriteria);
-      
+
       // Pagination
       const start = Math.max(0, uids.length - page * limit);
       const end = Math.max(0, uids.length - (page - 1) * limit);
       const paginatedUids = uids.slice(start, end).reverse();
 
       const emails = [];
-      
+
       if (paginatedUids.length > 0) {
         const messages = await this.fetchMessages(imap, paginatedUids);
-        
+
         for (const msg of messages) {
           const parsed = await simpleParser(msg.body);
           emails.push(this.parseEmail(msg.uid.toString(), parsed, msg.attrs));
