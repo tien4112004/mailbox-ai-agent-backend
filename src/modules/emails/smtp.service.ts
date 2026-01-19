@@ -82,6 +82,7 @@ export class SmtpService {
           filename: att.filename,
           content: att.content,
           contentType: att.contentType,
+          encoding: 'base64',
         }));
       }
 

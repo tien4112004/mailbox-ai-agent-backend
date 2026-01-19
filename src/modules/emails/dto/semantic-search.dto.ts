@@ -1,5 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsNumber, Min, Max } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsString, IsOptional, IsNumber, Min, Max, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class SemanticSearchDto {
     @ApiProperty({
@@ -30,4 +31,21 @@ export class SemanticSearchDto {
     @Min(1)
     @Max(50)
     limit?: number;
+
+    @ApiPropertyOptional({ example: 'inbox' })
+    @IsOptional()
+    @IsString()
+    folder?: string;
+
+    @ApiPropertyOptional({ example: false })
+    @IsOptional()
+    @Type(() => Boolean)
+    @IsBoolean()
+    isRead?: boolean;
+
+    @ApiPropertyOptional({ example: true })
+    @IsOptional()
+    @Type(() => Boolean)
+    @IsBoolean()
+    hasAttachment?: boolean;
 }

@@ -253,6 +253,7 @@ export class EmailsService {
   normalizeEmailResponse(email: any, isFromDatabase: boolean = false) {
     if (isFromDatabase) {
       // Database format -> Unified format
+      const isRead = email.read ?? false;
       return {
         id: email.id,
         threadId: null, // Database emails don't have thread IDs
@@ -269,10 +270,10 @@ export class EmailsService {
         body: email.body || '',
         htmlBody: email.body || '',
         textBody: email.body || '',
-        read: email.read || false,
+        read: isRead,
         starred: email.starred || false,
         folder: email.folder || 'INBOX',
-        labelIds: [],
+        labelIds: isRead ? [] : ['UNREAD'],
         attachments: email.attachments || [],
         summary: email.summary || null,
         source: 'db',
@@ -388,6 +389,7 @@ export class EmailsService {
 
   async modifyEmail(userId: string, emailId: string, dto: ModifyEmailDto) {
     const provider = await this.emailProviderFactory.createProvider(userId);
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     const addLabelIds: string[] = dto.addLabels || [];
     const removeLabelIds: string[] = dto.removeLabels || [];
@@ -413,6 +415,22 @@ export class EmailsService {
     // Handle trash
     if (dto.trash) {
       await provider.trashEmail(emailId);
+
+      try {
+        // Sync to local DB (Trash)
+        let updated = false;
+        if (uuidRegex.test(emailId)) {
+          const result = await this.emailRepository.update({ id: emailId, userId }, { folder: 'TRASH' });
+          if (result.affected && result.affected > 0) updated = true;
+        }
+
+        if (!updated) {
+          await this.emailRepository.update({ messageId: emailId, userId }, { folder: 'TRASH' });
+        }
+      } catch (e) {
+        this.logger.warn(`Failed to sync Trash to DB for ${emailId}: ${(e as Error).message}`);
+      }
+
       return { message: 'Email moved to trash' };
     }
 
@@ -425,6 +443,35 @@ export class EmailsService {
       );
     }
 
+    // Sync to local DB
+    try {
+      const updateData: any = {};
+      if (dto.read !== undefined) updateData.read = dto.read;
+      if (dto.starred !== undefined) updateData.starred = dto.starred;
+
+      if (Object.keys(updateData).length > 0) {
+        let updated = false;
+        if (uuidRegex.test(emailId)) {
+          const result = await this.emailRepository.update({ id: emailId, userId }, updateData);
+          if (result.affected && result.affected > 0) {
+            updated = true;
+            this.logger.log(`Synced DB for email ${emailId} by UUID`);
+          }
+        }
+
+        if (!updated) {
+          const result = await this.emailRepository.update({ messageId: emailId, userId }, updateData);
+          if (result.affected && result.affected > 0) {
+            this.logger.log(`Synced DB for email ${emailId} by MessageID`);
+          } else {
+            this.logger.warn(`Could not sync DB for email ${emailId} - No record found by UUID or MessageID`);
+          }
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to sync email modification to DB for ${emailId}: ${(err as Error).message}`);
+    }
+
     return { message: 'Email modified successfully' };
   }
 
@@ -432,6 +479,23 @@ export class EmailsService {
     const provider = await this.emailProviderFactory.createProvider(userId);
 
     await provider.deleteEmail(emailId);
+
+    // Sync to local DB
+    try {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      let deleted = false;
+
+      if (uuidRegex.test(emailId)) {
+        const result = await this.emailRepository.delete({ id: emailId, userId });
+        if (result.affected && result.affected > 0) deleted = true;
+      }
+
+      if (!deleted) {
+        await this.emailRepository.delete({ messageId: emailId, userId });
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to sync email deletion to DB for ${emailId}: ${(err as Error).message}`);
+    }
 
     return { message: 'Email deleted permanently' };
   }

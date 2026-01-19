@@ -32,5 +32,12 @@ export class SummarizeEmailDto {
   @IsOptional()
   customInstructions?: string;
 
-  // provider field removed — only Gemini is supported
+  @ApiProperty({
+    type: String,
+    description: 'AI Provider to use (e.g. gemini)',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  provider?: string;
 }

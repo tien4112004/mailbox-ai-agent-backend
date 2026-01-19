@@ -28,6 +28,7 @@ export class GmailService {
       'https://www.googleapis.com/auth/gmail.labels',
       'https://www.googleapis.com/auth/userinfo.email',
       'https://www.googleapis.com/auth/userinfo.profile',
+      'https://mail.google.com/',
     ];
 
     return this.oauth2Client.generateAuthUrl({

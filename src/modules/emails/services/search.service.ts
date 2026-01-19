@@ -232,13 +232,41 @@ export class EmailSearchService implements OnModuleInit {
     userId: string,
     queryText: string,
     limit = 10,
+    filters?: { folder?: string; isRead?: boolean; hasAttachment?: boolean },
   ): Promise<{ query: string; count: number; results: (Email & { similarity: number })[] }> {
-    if (!queryText || queryText.trim().length === 0) {
+    const trimmedQuery = queryText?.trim();
+
+    // If query is empty, delegate to fuzzySearchEmails to handle filter-only search if filters are present
+    if (!trimmedQuery) {
+      if (filters && (filters.folder || filters.isRead !== undefined || filters.hasAttachment !== undefined)) {
+        return this.fuzzySearchEmails(userId, { query: '', limit, filters });
+      }
       throw new BadRequestException('Search query cannot be empty');
     }
 
-    const queryEmbedding = await this.generateEmbedding(queryText);
+    const queryEmbedding = await this.generateEmbedding(trimmedQuery);
     const param = '[' + queryEmbedding.join(',') + ']';
+
+    const params: any[] = [param, userId, limit];
+    let filterSql = '';
+
+    if (filters) {
+      if (filters.folder) {
+        params.push(filters.folder);
+        filterSql += ` AND e.folder = $${params.length}`;
+      }
+      if (filters.isRead !== undefined) {
+        params.push(filters.isRead);
+        filterSql += ` AND e.read = $${params.length}`;
+      }
+      if (filters.hasAttachment !== undefined) {
+        if (filters.hasAttachment) {
+          filterSql += ` AND (e.attachments IS NOT NULL AND jsonb_array_length(e.attachments) > 0)`;
+        } else {
+          filterSql += ` AND (e.attachments IS NULL OR jsonb_array_length(e.attachments) = 0)`;
+        }
+      }
+    }
 
     const sql = `
       SELECT
@@ -246,11 +274,12 @@ export class EmailSearchService implements OnModuleInit {
         (1 - (e.embedding <=> $1::vector)) as similarity
       FROM emails e
       WHERE e.user_id = $2 AND e.embedding IS NOT NULL
+      ${filterSql}
       ORDER BY e.embedding <=> $1::vector
       LIMIT $3
     `;
 
-    const results = await this.dataSource.query(sql, [param, userId, limit]);
+    const results = await this.dataSource.query(sql, params);
 
     return {
       query: queryText,
@@ -286,6 +315,7 @@ export class EmailSearchService implements OnModuleInit {
     userId: string,
     queryText: string,
     limitOverride?: number,
+    filters?: { folder?: string; isRead?: boolean; hasAttachment?: boolean },
   ): Promise<{ query: string; count: number; results: (Email & { similarity: number; sources: string[] })[] }> {
     const query = queryText?.trim();
     if (!query) throw new BadRequestException('Search query cannot be empty');
@@ -297,7 +327,7 @@ export class EmailSearchService implements OnModuleInit {
     const merged = new Map<string, any>();
 
     try {
-      const fuzzyRes = await this.fuzzySearchEmails(userId, { query, limit, fields: fields.join(','), threshold } as any);
+      const fuzzyRes = await this.fuzzySearchEmails(userId, { query, limit, fields: fields.join(','), threshold, filters } as any);
       for (const r of fuzzyRes.results) {
         merged.set(r.id, { ...r, similarity: r.similarity, sources: ['fuzzy'] });
       }
@@ -329,7 +359,7 @@ export class EmailSearchService implements OnModuleInit {
 
     if (this.semanticAvailable) {
       try {
-        const semRes = await this.semanticSearch(userId, query, limit * 2);
+        const semRes = await this.semanticSearch(userId, query, limit * 2, filters);
         for (const r of semRes.results) {
           const existing = merged.get(r.id);
           const semSim = r.similarity || 0;
@@ -348,7 +378,19 @@ export class EmailSearchService implements OnModuleInit {
     }
 
     // Convert merged to array, sort by similarity desc then createdAt desc
+    // Apply in-memory filtering as a safeguard for sources that didn't support DB filtering (like fuzzySearchByField)
     const resultsArr = Array.from(merged.values())
+      .filter(r => {
+        if (filters) {
+          if (filters.folder && r.folder !== filters.folder) return false;
+          if (filters.isRead !== undefined && r.read !== filters.isRead) return false;
+          if (filters.hasAttachment !== undefined) {
+            const has = r.attachments && (Array.isArray(r.attachments) ? r.attachments.length > 0 : false);
+            if (filters.hasAttachment !== has) return false;
+          }
+        }
+        return true;
+      })
       .sort((a, b) => {
         if (b.similarity === a.similarity) {
           // newest first
@@ -368,17 +410,81 @@ export class EmailSearchService implements OnModuleInit {
 
   async fuzzySearchEmails(
     userId: string,
-    params: { query: string; limit?: number; fields?: string; threshold?: number },
+    params: {
+      query?: string;
+      limit?: number;
+      fields?: string;
+      threshold?: number;
+      filters?: { folder?: string; isRead?: boolean; hasAttachment?: boolean };
+    },
   ): Promise<{
     query: string;
     count: number;
     results: (Email & { similarity: number })[];
   }> {
-    if (!params.query || params.query.trim().length === 0) {
-      throw new BadRequestException('Search query cannot be empty');
+    const filters = params.filters || {};
+    const query = params.query?.trim();
+
+    // Check for filter-only search or empty query error
+    if (!query) {
+      if (!filters.folder && filters.isRead === undefined && filters.hasAttachment === undefined) {
+        throw new BadRequestException('Search query cannot be empty');
+      }
+
+      // Filter-only search logic
+      const limit = params.limit || this.defaultLimit;
+      const conditions: string[] = [`e.user_id = $1`, `e.message_id IS NOT NULL`];
+      const p: any[] = [userId];
+      let idx = 2;
+
+      if (filters.folder) {
+        conditions.push(`e.folder = $${idx++}`);
+        p.push(filters.folder);
+      }
+      if (filters.isRead !== undefined) {
+        conditions.push(`e.read = $${idx++}`);
+        p.push(filters.isRead);
+      }
+      if (filters.hasAttachment !== undefined) {
+        if (filters.hasAttachment) {
+          conditions.push(`(e.attachments IS NOT NULL AND jsonb_array_length(e.attachments) > 0)`);
+        } else {
+          conditions.push(`(e.attachments IS NULL OR jsonb_array_length(e.attachments) = 0)`);
+        }
+      }
+
+      const sql = `
+        SELECT 
+          e.id, e.subject, e.preview, e.body, e.from_email, e.to_email, 
+          e.created_at, e.created_at as "createdAt", e.read, e.starred, e.folder,
+          e.attachments
+        FROM emails e
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY e.created_at DESC
+        LIMIT $${idx}
+      `;
+      p.push(limit);
+
+      try {
+        const results = await this.dataSource.query(sql, p);
+        const mapped = results.map(r => ({
+          ...r,
+          similarity: 1.0,
+          read: r.read,
+          starred: r.starred
+        }));
+
+        return {
+          query: '',
+          count: mapped.length,
+          results: mapped,
+        };
+      } catch (err) {
+        this.logger.error(`Filter-only search failed: ${(err as Error).message}`);
+        throw err;
+      }
     }
 
-    const query = params.query.trim();
     const limit = params.limit || this.defaultLimit;
     const threshold = params.threshold ?? 0.1; // Lowered threshold for better fuzzy matching
     const fields = (params.fields || this.defaultFields.join(','))
@@ -391,6 +497,34 @@ export class EmailSearchService implements OnModuleInit {
         'Invalid fields. Must be one or more of: subject, from_email, body',
       );
     }
+
+    // Helper to generate filter SQL and params based on starting index
+    // filters variable is already defined above
+
+
+    // Helper to generate filter SQL and params based on starting index
+    const buildFilterSql = (startIndex: number) => {
+      const conditions: string[] = [];
+      const p: any[] = [];
+      let idx = startIndex;
+
+      if (filters.folder) {
+        conditions.push(`e.folder = $${idx++}`);
+        p.push(filters.folder);
+      }
+      if (filters.isRead !== undefined) {
+        conditions.push(`e.read = $${idx++}`);
+        p.push(filters.isRead);
+      }
+      if (filters.hasAttachment !== undefined) {
+        if (filters.hasAttachment) {
+          conditions.push(`(e.attachments IS NOT NULL AND jsonb_array_length(e.attachments) > 0)`);
+        } else {
+          conditions.push(`(e.attachments IS NULL OR jsonb_array_length(e.attachments) = 0)`);
+        }
+      }
+      return { sql: conditions.length ? 'AND ' + conditions.join(' AND ') : '', params: p };
+    };
 
     try {
       // First check if user has any emails
@@ -426,6 +560,9 @@ export class EmailSearchService implements OnModuleInit {
           )
           .join(' OR ');
 
+        // Levenshtein Params: [query, userId, maxDistance, limit] -> Next index 5
+        const levFilters = buildFilterSql(5);
+
         const levenshteinSql = `
           SELECT 
             e.*,
@@ -434,6 +571,7 @@ export class EmailSearchService implements OnModuleInit {
           WHERE 
             e.user_id = $2
             AND (${wordMatchConditions})
+            ${levFilters.sql}
           ORDER BY e.created_at DESC
           LIMIT $4
         `;
@@ -444,6 +582,7 @@ export class EmailSearchService implements OnModuleInit {
             userId,
             maxDistance,
             limit,
+            ...levFilters.params,
           ]);
 
           this.logger.debug(
@@ -458,6 +597,9 @@ export class EmailSearchService implements OnModuleInit {
             .map((field) => `LOWER(e."${field}") LIKE LOWER('%' || $1::text || '%')`)
             .join(' OR ');
 
+          // Fallback Params: [query, userId, limit] -> Next index 4
+          const fbFilters = buildFilterSql(4);
+
           const fallbackSql = `
             SELECT 
               e.*,
@@ -466,6 +608,7 @@ export class EmailSearchService implements OnModuleInit {
             WHERE 
               e.user_id = $2
               AND (${fallbackConditions})
+              ${fbFilters.sql}
             ORDER BY e.created_at DESC
             LIMIT $3
           `;
@@ -474,6 +617,7 @@ export class EmailSearchService implements OnModuleInit {
             query,
             userId,
             limit,
+            ...fbFilters.params,
           ]);
 
           this.logger.debug(
@@ -499,6 +643,9 @@ export class EmailSearchService implements OnModuleInit {
           .map((field) => `similarity(e."${field}"::text, $1::text)`)
           .join(', ');
 
+        // Trigram Params: [query, userId, threshold, limit] -> Next index 5
+        const triFilters = buildFilterSql(5);
+
         const sql = `
           SELECT 
             e.*,
@@ -507,6 +654,7 @@ export class EmailSearchService implements OnModuleInit {
           WHERE 
             e.user_id = $2
             AND (${fieldConditions})
+            ${triFilters.sql}
           ORDER BY similarity DESC
           LIMIT $4
         `;
@@ -519,6 +667,7 @@ export class EmailSearchService implements OnModuleInit {
           userId,
           threshold,
           limit,
+          ...triFilters.params,
         ]);
 
         this.logger.debug(
@@ -536,6 +685,9 @@ export class EmailSearchService implements OnModuleInit {
           .map((field) => `LOWER(e."${field}") LIKE LOWER($1)`)
           .join(' OR ');
 
+        // Fallback2 Params: [%query%, userId, limit] -> Next index 4
+        const fb2Filters = buildFilterSql(4);
+
         const fallbackSql = `
           SELECT 
             e.*,
@@ -544,6 +696,7 @@ export class EmailSearchService implements OnModuleInit {
           WHERE 
             e.user_id = $2
             AND (${fallbackConditions})
+            ${fb2Filters.sql}
           LIMIT $3
         `;
 
@@ -551,6 +704,7 @@ export class EmailSearchService implements OnModuleInit {
           `%${query}%`,
           userId,
           limit,
+          ...fb2Filters.params,
         ]);
 
         this.logger.debug(

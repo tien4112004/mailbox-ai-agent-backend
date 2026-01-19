@@ -56,65 +56,44 @@ export class GeminiClient {
     if (!Array.isArray(texts) || texts.length === 0) return [];
 
     try {
-      // Use batchEmbedContents if available (preferred for batching)
-      // This is the correct method for the new Google GenAI SDK to handle multiple requests in one go
-      // Limit is typically 100 requests per batch call, which matches our planned chunkSize
+      // 1. Prepare requests
+      const requests = texts.map(t => ({
+        content: { role: 'user', parts: [{ text: t }] }
+      }));
 
       let response: any;
-      const requests = texts.map(t => ({ content: { parts: [{ text: t }] }, model: `models/${this.model}` }));
 
-      // Try accessing the batch method on the model instance (if using getGenerativeModel) or via client
-      // The SDK structure can vary, but usually it's on the client or model
-      // Based on docs for @google/genai, we might need to use `client.batchEmbedContents`
-
-      // Attempt 1: Check if ai.batchEmbedContents exists (newer SDKs)
-      if (typeof this.ai.batchEmbedContents === 'function') {
-        response = await this.ai.batchEmbedContents({ requests });
+      // 2. Try to call batchEmbedContents on the client via 'models' property (New SDK @google/genai style)
+      if (this.ai?.models?.batchEmbedContents) {
+        response = await this.ai.models.batchEmbedContents({
+          model: this.model,
+          requests,
+        });
       }
-      // Attempt 2: gemini.batchEmbedContents
-      else if (this.ai?.gemini?.batchEmbedContents) {
-        response = await this.ai.gemini.batchEmbedContents({ requests });
+      // 3. Try legacy or alternative paths
+      else if (typeof this.ai?.batchEmbedContents === 'function') {
+        response = await this.ai.batchEmbedContents({ model: this.model, requests });
       }
-      // Attempt 3: models.batchEmbedContents (older)
-      else if (this.ai?.models?.batchEmbedContents) {
-        response = await this.ai.models.batchEmbedContents({ requests });
-      } else {
-        // Fallback to serial execution if batch method not found
-        this.logger.warn('Gemini SDK batchEmbedContents not found, falling back to serial');
+      else {
+        this.logger.warn('Gemini SDK batchEmbedContents not found on client.models, falling back to serial');
         return this.embedSequential(texts);
       }
 
-      // Parse response. The structure is usually { embeddings: [ { values: [...] }, ... ] }
-      // but let's be robust
-
-      const embeddings: number[][] = [];
-      const rawEmbeddings = response?.embeddings || response?.data || [];
-
-      if (Array.isArray(rawEmbeddings)) {
-        for (const item of rawEmbeddings) {
-          const values = item?.values || item?.embedding || null;
-          if (Array.isArray(values)) {
-            embeddings.push(values as number[]);
-          } else {
-            embeddings.push([]); // Keep index alignment even if empty/error
-          }
-        }
-      }
+      // 4. Parse output
+      // @google/genai response structure: { embeddings: [ { values: [...] }, ... ] }
+      const embeddings = response?.embeddings?.map(e => e.values) || [];
 
       if (embeddings.length !== texts.length) {
-        this.logger.warn(`Gemini batch embedding returned ${embeddings.length} items, expected ${texts.length}`);
+        this.logger.warn(`Gemini batch embedding count mismatch: got ${embeddings.length}, expected ${texts.length}`);
+        while (embeddings.length < texts.length) embeddings.push([]);
       }
 
       return embeddings;
 
     } catch (err) {
       this.logger.error('Gemini embedMany error', err as any);
-      // Fallback to serial on error (e.g. if batch failed totally)
-      try {
-        return this.embedSequential(texts);
-      } catch (serialErr) {
-        throw serialErr;
-      }
+      // Fallback to serial on error
+      return this.embedSequential(texts);
     }
   }
 

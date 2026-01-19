@@ -758,6 +758,11 @@ export class EmailsController {
       query: dto.q,
       fields: dto.fields,
       limit: dto.limit,
+      filters: {
+        folder: dto.folder,
+        isRead: dto.isRead,
+        hasAttachment: dto.hasAttachment,
+      }
     });
 
     // Return only normalized email objects (no similarity/sources/metadata) as requested
@@ -805,10 +810,18 @@ export class EmailsController {
     const finalQuery = q || query;
 
     if (!finalQuery) {
-      throw new BadRequestException('Query parameter "q" or "query" is required');
+      if (!dto.folder && dto.isRead === undefined && dto.hasAttachment === undefined) {
+        throw new BadRequestException('Query parameter "q" or filters are required');
+      }
     }
 
-    const result = await this.searchService.semanticSearch(userId, finalQuery, limit);
+    const filters = {
+      folder: dto.folder,
+      isRead: dto.isRead,
+      hasAttachment: dto.hasAttachment,
+    };
+
+    const result = await this.searchService.semanticSearch(userId, finalQuery, limit, filters);
 
     const emails = result.results.map(email =>
       this.emailsService.normalizeEmailResponse(email, true)
@@ -839,11 +852,20 @@ export class EmailsController {
     const q = body?.q || body?.query || queryDto.q || queryDto.query;
     const limit = body?.limit || queryDto.limit || 10;
 
+    const filters = {
+      folder: body?.folder || queryDto.folder,
+      isRead: body?.isRead !== undefined ? body.isRead : queryDto.isRead,
+      hasAttachment: body?.hasAttachment !== undefined ? body.hasAttachment : queryDto.hasAttachment,
+    };
+
     if (!q) {
-      throw new BadRequestException('Query parameter "q" (or body.q/query) is required');
+      const hasFilters = filters.folder || filters.isRead !== undefined || filters.hasAttachment !== undefined;
+      if (!hasFilters) {
+        throw new BadRequestException('Query parameter "q" (or body.q/query) or filters are required');
+      }
     }
 
-    const result = await this.searchService.semanticSearch(userId, q, limit);
+    const result = await this.searchService.semanticSearch(userId, q || '', limit, filters);
 
     const emails = result.results.map(email =>
       this.emailsService.normalizeEmailResponse(email, true)
@@ -867,14 +889,19 @@ export class EmailsController {
     @Request() req,
     @Query() dto: FuzzySearchDto,
   ) {
-    if (!dto.q) {
-      throw new BadRequestException('Query parameter "q" is required');
+    if (!dto.q && !dto.folder && dto.isRead === undefined && dto.hasAttachment === undefined) {
+      throw new BadRequestException('Query parameter "q" or filters are required');
     }
 
     const result = await this.searchService.fuzzySearchEmails(req.user.id, {
       query: dto.q,
       fields: dto.fields,
       limit: dto.limit,
+      filters: {
+        folder: dto.folder,
+        isRead: dto.isRead,
+        hasAttachment: dto.hasAttachment,
+      }
     });
 
     const emails = result.results.map((r) => this.emailsService.normalizeEmailResponse(r, true));
@@ -900,18 +927,29 @@ export class EmailsController {
     @Query() queryDto: FuzzySearchDto,
   ) {
     // Support both body and query params
+    // Support both body and query params
     const q = body?.q || body?.query || queryDto.q;
     const fields = body?.fields || queryDto.fields;
     const limit = body?.limit || queryDto.limit;
 
+    const filters = {
+      folder: body?.folder || queryDto.folder,
+      isRead: body?.isRead !== undefined ? body.isRead : queryDto.isRead,
+      hasAttachment: body?.hasAttachment !== undefined ? body.hasAttachment : queryDto.hasAttachment,
+    };
+
     if (!q) {
-      throw new BadRequestException('Query parameter "q" (or body.q/query) is required');
+      const hasFilters = filters.folder || filters.isRead !== undefined || filters.hasAttachment !== undefined;
+      if (!hasFilters) {
+        throw new BadRequestException('Query parameter "q" (or body.q/query) is required');
+      }
     }
 
     const result = await this.searchService.fuzzySearchEmails(req.user.id, {
       query: q,
       fields: fields,
       limit: limit,
+      filters: filters,
     });
 
     const emails = result.results.map((r) => this.emailsService.normalizeEmailResponse(r, true));

@@ -53,10 +53,12 @@ export class FuzzySearchDto {
   @ApiProperty({
     name: 'q',
     example: 'web',
-    description: 'Search query text'
+    description: 'Search query text',
+    required: false
   })
+  @IsOptional()
   @IsString()
-  q: string;
+  q?: string;
 
   @ApiPropertyOptional({
     example: 'subject,from_email',
@@ -72,4 +74,21 @@ export class FuzzySearchDto {
   @IsInt()
   @Min(1)
   limit?: number = 20;
+
+  @ApiPropertyOptional({ example: 'inbox' })
+  @IsOptional()
+  @IsString()
+  folder?: string;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isRead?: boolean;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  hasAttachment?: boolean;
 }
