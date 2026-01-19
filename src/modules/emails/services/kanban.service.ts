@@ -620,4 +620,21 @@ export class KanbanService {
 
     return this.kanbanCardRepository.save(updatedCards);
   }
+
+  /**
+   * Reset Kanban board: Remove all cards and re-sync from last 3 days
+   */
+  async resetBoard(userId: string): Promise<void> {
+    // Get all user columns
+    const columns = await this.kanbanColumnRepository.find({ where: { userId } });
+    const columnIds = columns.map(col => col.id);
+
+    if (columnIds.length > 0) {
+      // Delete all cards in these columns
+      await this.kanbanCardRepository.delete({ columnId: In(columnIds) });
+    }
+
+    // Re-sync
+    await this.syncEmailsToBoard(userId);
+  }
 }

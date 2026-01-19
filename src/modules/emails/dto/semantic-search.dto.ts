@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsOptional, IsNumber, Min, Max, IsBoolean } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export class SemanticSearchDto {
     @ApiProperty({
@@ -39,13 +39,13 @@ export class SemanticSearchDto {
 
     @ApiPropertyOptional({ example: false })
     @IsOptional()
-    @Type(() => Boolean)
+    @Transform(({ value }) => value === 'true' || value === true)
     @IsBoolean()
     isRead?: boolean;
 
     @ApiPropertyOptional({ example: true })
     @IsOptional()
-    @Type(() => Boolean)
+    @Transform(({ value }) => value === 'true' || value === true)
     @IsBoolean()
     hasAttachment?: boolean;
 }

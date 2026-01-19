@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, IsInt, Min, IsBoolean } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export class GetEmailsDto {
   @ApiPropertyOptional({ example: 'inbox' })
@@ -34,19 +34,22 @@ export class GetEmailsDto {
 
   @ApiPropertyOptional({ example: false, description: 'Force sync from SMTP server (default: false, uses database cache)' })
   @IsOptional()
-  @Type(() => Boolean)
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   forceSync?: boolean = false;
 
   @ApiPropertyOptional({ example: false, description: 'Filter by read status (true=read, false=unread)' })
   @IsOptional()
-  @Type(() => Boolean)
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   isRead?: boolean;
 
   @ApiPropertyOptional({ example: true, description: 'Filter by attachment presence' })
   @IsOptional()
-  @Type(() => Boolean)
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   hasAttachment?: boolean;
 }

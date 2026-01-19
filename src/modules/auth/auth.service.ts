@@ -21,7 +21,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private gmailService: GmailService,
-  ) {}
+  ) { }
 
   async register(registerDto: RegisterDto) {
     const existingUser = await this.userRepository.findOne({
@@ -94,7 +94,7 @@ export class AuthService {
       const response = await fetch(
         `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${googleToken}`,
       );
-      
+
       if (!response.ok) {
         throw new UnauthorizedException('Invalid Google token');
       }
@@ -139,11 +139,19 @@ export class AuthService {
   }
 
   async refreshToken(userId: string, refreshToken: string) {
+    console.log(`[AuthService] Refreshing token for user ${userId}`);
     const user = await this.userRepository.findOne({
       where: { id: userId },
     });
 
+    if (!user) {
+      console.log(`[AuthService] User ${userId} not found`);
+    } else {
+      console.log(`[AuthService] User found. Has refresh token in DB: ${!!user.refreshToken}`);
+    }
+
     if (!user || !user.refreshToken) {
+      console.log('[AuthService] Refresh failed: User not found or DB refresh token is null');
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -153,17 +161,21 @@ export class AuthService {
     );
 
     if (!isRefreshTokenValid) {
+      console.log('[AuthService] Refresh failed: Token mismatch');
       throw new UnauthorizedException('Invalid refresh token');
     }
 
     const tokens = await this.generateTokens(user);
     await this.updateRefreshToken(user.id, tokens.refreshToken);
+    console.log(`[AuthService] Token refreshed successfully for user ${userId}`);
 
     return tokens;
   }
 
   async logout(userId: string) {
+    console.log(`[AuthService] Logging out user ${userId}`);
     await this.userRepository.update(userId, { refreshToken: null });
+    console.log(`[AuthService] Set refreshToken to null for user ${userId}`);
     return { message: 'Logged out successfully' };
   }
 
@@ -214,7 +226,7 @@ export class AuthService {
       // Store Gmail tokens
       user.gmailAccessToken = tokens.access_token;
       user.gmailRefreshToken = tokens.refresh_token;
-      
+
       if (tokens.expiry_date) {
         user.gmailTokenExpiry = new Date(tokens.expiry_date);
       }
@@ -257,7 +269,7 @@ export class AuthService {
       );
 
       user.gmailAccessToken = tokens.access_token;
-      
+
       if (tokens.expiry_date) {
         user.gmailTokenExpiry = new Date(tokens.expiry_date);
       }
@@ -287,15 +299,15 @@ export class AuthService {
     if (user.gmailTokenExpiry) {
       const now = new Date();
       const expiryWithBuffer = new Date(user.gmailTokenExpiry.getTime() - 5 * 60 * 1000);
-      
+
       if (now >= expiryWithBuffer) {
         await this.refreshGmailToken(userId);
-        
+
         // Fetch updated user
         const updatedUser = await this.userRepository.findOne({
           where: { id: userId },
         });
-        
+
         return {
           accessToken: updatedUser.gmailAccessToken,
           refreshToken: updatedUser.gmailRefreshToken,

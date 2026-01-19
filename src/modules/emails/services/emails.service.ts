@@ -91,8 +91,8 @@ export class EmailsService {
           fromName: gmailEmail.from?.name || '',
           fromEmail: gmailEmail.from?.email || '',
           toEmail: gmailEmail.to?.map((t: any) => t.email) || [],
-          read: !gmailEmail.labels?.includes('UNREAD'),
-          starred: gmailEmail.labels?.includes('STARRED') || false,
+          read: gmailEmail.read,
+          starred: gmailEmail.starred,
           folder: 'INBOX',
           attachments: gmailEmail.attachments || null,
           messageId: gmailEmail.id || null,
@@ -100,6 +100,10 @@ export class EmailsService {
           createdAt: new Date(gmailEmail.date),
         });
       });
+
+      if (emailsToSave.length > 0) {
+        this.logger.debug(`Sample email sync status - Subject: ${emailsToSave[0].subject}, Read: ${emailsToSave[0].read}, Starred: ${emailsToSave[0].starred}`);
+      }
 
       // Save all emails (no duplicate check since we already deleted old ones)
       const savedEmails = await this.emailRepository.save(emailsToSave);
@@ -478,26 +482,75 @@ export class EmailsService {
   async deleteEmail(userId: string, emailId: string) {
     const provider = await this.emailProviderFactory.createProvider(userId);
 
-    await provider.deleteEmail(emailId);
+    // Try to determine if email is already in Trash
+    let isTrashed = false;
+    let providerId = emailId;
 
-    // Sync to local DB
-    try {
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      let deleted = false;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-      if (uuidRegex.test(emailId)) {
-        const result = await this.emailRepository.delete({ id: emailId, userId });
-        if (result.affected && result.affected > 0) deleted = true;
-      }
-
-      if (!deleted) {
-        await this.emailRepository.delete({ messageId: emailId, userId });
-      }
-    } catch (err) {
-      this.logger.warn(`Failed to sync email deletion to DB for ${emailId}: ${(err as Error).message}`);
+    // Check local DB first
+    let dbEmail = null;
+    if (uuidRegex.test(emailId)) {
+      dbEmail = await this.emailRepository.findOne({ where: { id: emailId, userId } });
+    } else {
+      // Assume emailId is provider ID
+      dbEmail = await this.emailRepository.findOne({ where: { messageId: emailId, userId } });
     }
 
-    return { message: 'Email deleted permanently' };
+    if (dbEmail) {
+      isTrashed = dbEmail.folder === 'TRASH';
+      if (dbEmail.messageId) providerId = dbEmail.messageId;
+    } else {
+      // If not in DB, try to check remotely if possible, or assume not trashed (safer)
+      // Or fetch metadata
+      try {
+        // This might fail if emailId is UUID but not in DB
+        if (!uuidRegex.test(emailId)) {
+          const remoteEmail = await provider.getEmailById(emailId);
+          isTrashed = remoteEmail.labelIds && (remoteEmail.labelIds.includes('TRASH') || remoteEmail.labelIds.includes('TRASHED'));
+        }
+      } catch (e) {
+        this.logger.debug(`Could not check remote status for ${emailId}: ${e.message}`);
+      }
+    }
+
+    if (isTrashed) {
+      // PERMANENT DELETE
+      await provider.deleteEmail(providerId);
+
+      // Sync to local DB
+      try {
+        if (uuidRegex.test(emailId)) {
+          await this.emailRepository.delete({ id: emailId, userId });
+        } else {
+          await this.emailRepository.delete({ messageId: emailId, userId });
+        }
+        // Also try cleaning up by messageId if we found the record
+        if (dbEmail && dbEmail.messageId) {
+          await this.emailRepository.delete({ messageId: dbEmail.messageId, userId });
+        }
+      } catch (err) {
+        this.logger.warn(`Failed to sync email deletion to DB for ${emailId}: ${(err as Error).message}`);
+      }
+
+      return { message: 'Email deleted permanently' };
+    } else {
+      // MOVE TO TRASH
+      await provider.trashEmail(providerId);
+
+      // Sync to local DB
+      try {
+        if (dbEmail) {
+          await this.emailRepository.update({ id: dbEmail.id, userId }, { folder: 'TRASH' });
+        } else if (!uuidRegex.test(emailId)) {
+          await this.emailRepository.update({ messageId: emailId, userId }, { folder: 'TRASH' });
+        }
+      } catch (err) {
+        this.logger.warn(`Failed to sync email trash to DB for ${emailId}: ${(err as Error).message}`);
+      }
+
+      return { message: 'Email moved to trash' };
+    }
   }
 
   async getAttachment(

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, IsInt, Min, IsBoolean } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export class AdvancedSearchDto {
   @ApiProperty({
@@ -31,7 +31,8 @@ export class AdvancedSearchDto {
 
   @ApiPropertyOptional({ example: false, description: 'Force sync from SMTP server' })
   @IsOptional()
-  @Type(() => Boolean)
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   forceSync?: boolean = false;
 }
@@ -82,13 +83,15 @@ export class FuzzySearchDto {
 
   @ApiPropertyOptional({ example: false })
   @IsOptional()
-  @Type(() => Boolean)
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   isRead?: boolean;
 
   @ApiPropertyOptional({ example: true })
   @IsOptional()
-  @Type(() => Boolean)
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   hasAttachment?: boolean;
 }

@@ -641,6 +641,17 @@ export class EmailsController {
     return { success: true, message: 'Column deleted successfully' };
   }
 
+  @Post('kanban/reset')
+  @ApiOperation({ summary: 'Reset Kanban board (Delete all cards and re-sync recent emails)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Kanban board reset successfully',
+  })
+  async resetKanbanBoard(@Request() req) {
+    await this.kanbanService.resetBoard(req.user.id);
+    return { success: true, message: 'Kanban board reset and synced successfully' };
+  }
+
   @Post('kanban/cards/move')
   @ApiOperation({ summary: 'Move a card between columns (drag and drop)' })
   @ApiResponse({

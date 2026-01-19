@@ -29,6 +29,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found');
     }
 
+    // Force strict session check: If refresh token is null, user is logged out
+    // This ensures immediate "Logout All" effect.
+    if (!user.refreshToken) {
+      throw new UnauthorizedException('User is logged out');
+    }
+
     return user;
   }
 }
