@@ -3,16 +3,16 @@
 Team: 22120134-22120368-22120370
 
 GitHub repo URL: 
-- Backend: 
-- Frontend: 
+- Backend: https://github.com/tien4112004/mailbox-ai-agent-backend
+- Frontend: https://github.com/NBVTien/hcmus-awad-mail-project
 
 # **TEAM INFORMATION**
 
 | Student ID | Full name              | Git account       | Contribution                        | Contribution percentage (100% total) | Expected total points | Final total points |
 | :--------- | :--------------------- | :---------------- | :---------------------------------- | :----------------------------------- | :-------------------- | :----------------- |
-| 22120134   | Hoàng Tiến Huy | Sciderus | \<List of tasks done by student 1\> | 33%                                  |                   10    |                    |
-| 22120368   | Phan Thanh Tiến | tien4112004 | \<List of tasks done by student 2\> | 33%                                  |                     10  |                    |
-| 22120370   | Nguyễn Bùi Vương Tiễn | NBVTien | \<List of tasks done by student 3\> | 34%                                  |                    10   |                    |
+| 22120134   | Hoàng Tiến Huy | Sciderus | \<List of tasks done by student 1\> | 33.4%                                  |                   10    |                    |
+| 22120368   | Phan Thanh Tiến | tien4112004 | \<List of tasks done by student 2\> | 33.3%                                  |                     10  |                    |
+| 22120370   | Nguyễn Bùi Vương Tiễn | NBVTien | \<List of tasks done by student 3\> | 33.3%                                  |                    10   |                    |
 
 # **FEATURE LIST**
 
