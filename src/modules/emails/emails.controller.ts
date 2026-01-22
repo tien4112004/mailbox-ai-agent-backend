@@ -734,21 +734,59 @@ export class EmailsController {
 
   // Compatibility endpoint: old frontend may still call POST /api/emails/search/fuzzy
   // This maps to the unified search logic so behavior matches the new API.
+  // Accepts query in body OR as query params (q=...) for flexibility.
+  // Full params: q=test&fields=subject,from_email&limit=20&isRead=false&hasAttachment=true
   @Post('search/fuzzy')
   @ApiOperation({ summary: 'Compatibility: fuzzy search (legacy) mapped to unified search' })
   @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
   async legacyFuzzySearch(
     @Request() req,
-    @Body() body: { query?: string; limit?: number },
+    @Query('q') queryParam?: string,
+    @Query('fields') fieldsParam?: string,
+    @Query('limit') limitParam?: string,
+    @Query('isRead') isReadParam?: string,
+    @Query('hasAttachment') hasAttachmentParam?: string,
+    @Body() body?: { query?: string; limit?: number; fields?: string } | null,
   ) {
-    const query = body?.query?.trim();
-    if (!query) {
-      throw new Error('Query parameter "query" is required');
+    // Accept query from either query params or body
+    const query = (queryParam || body?.query || '').trim();
+    
+    // Parse filters
+    const isRead = isReadParam !== undefined ? isReadParam === 'true' : undefined;
+    const hasAttachment = hasAttachmentParam !== undefined ? hasAttachmentParam === 'true' : undefined;
+    
+    // If no query and no filters, return empty
+    if (!query && isRead === undefined && hasAttachment === undefined) {
+      return { query: '', count: 0, emails: [] };
     }
 
-    const combined = await this.searchService.combinedSearch(req.user.id, query, body?.limit);
-    const emails = combined.results.map((r) => this.emailsService.normalizeEmailResponse(r, true));
-    return emails;
+    const limit = limitParam ? parseInt(limitParam, 10) : body?.limit;
+    const fields = fieldsParam || body?.fields || 'subject,from_email';
+    
+    // Use fuzzy search with fields parameter
+    const result = await this.searchService.fuzzySearchEmails(req.user.id, {
+      query: query || '',
+      limit,
+      fields,
+    });
+    
+    // Apply filters on results
+    let emails = result.results.map((r) => this.emailsService.normalizeEmailResponse(r, true));
+    
+    // Filter by isRead if specified
+    if (isRead !== undefined) {
+      emails = emails.filter((e: any) => e.read === isRead);
+    }
+    
+    // Filter by hasAttachment if specified
+    if (hasAttachment !== undefined) {
+      emails = emails.filter((e: any) => {
+        const hasAtt = e.attachments && e.attachments.length > 0;
+        return hasAttachment ? hasAtt : !hasAtt;
+      });
+    }
+    
+    return { query, count: emails.length, emails };
   }
 
   // Compatibility: field-specific fuzzy search (legacy)
